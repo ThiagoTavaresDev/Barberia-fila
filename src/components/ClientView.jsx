@@ -1,70 +1,82 @@
-import React from "react";
-import { Users, Clock, User, Phone } from "lucide-react";
-import { getWaitingTime } from "../utils/helpers";
+import React from 'react';
+import { Scissors, Users, Clock } from 'lucide-react';
+import { getClientPosition, getWaitingTime } from '../utils/helpers';
 
 export default function ClientView({ queue, clientId, onBack }) {
-  const clientIndex = queue.findIndex((c) => c.id === clientId);
-  const client = clientIndex >= 0 ? queue[clientIndex] : null;
+  const position = clientId ? getClientPosition(queue, clientId) : 0;
+  const client = queue.find(c => c.id === clientId);
+
+  if (!clientId || position === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
+          <Scissors className="w-16 h-16 mx-auto text-amber-500" />
+          <h2 className="text-2xl font-bold text-white">Cliente não encontrado</h2>
+          <p className="text-gray-400">
+            Você não está na fila ou seu atendimento já foi concluído.
+          </p>
+          <button
+            onClick={onBack}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
+          >
+            Voltar ao Início
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black p-4 flex justify-center">
-      <div className="max-w-md w-full bg-gray-800 rounded-xl p-6 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-6">
+        <div className="bg-gray-800 rounded-xl p-8 text-center space-y-6">
+          <Scissors className="w-16 h-16 mx-auto text-amber-500" />
+          <h2 className="text-3xl font-bold text-white">Olá, {client.name}!</h2>
+          
+          <div className="bg-gradient-to-r from-amber-600 to-amber-500 rounded-xl p-8">
+            <p className="text-amber-100 text-sm uppercase tracking-wide mb-2">Sua posição na fila</p>
+            <p className="text-6xl font-bold text-white">{position}º</p>
+          </div>
 
-        <button
-          onClick={onBack}
-          className="text-gray-400 hover:text-white transition-colors mb-4"
-        >
-          Voltar
-        </button>
-
-        <h1 className="text-3xl font-bold text-white text-center mb-6">
-          Sua Posição na Fila
-        </h1>
-
-        {/* Cliente encontrado */}
-        {client ? (
-          <div className="space-y-4 text-white">
-            <div className="bg-gray-700 p-4 rounded-xl">
-              <div className="flex items-center gap-3 mb-2">
-                <User className="w-5 h-5 text-amber-500" />
-                <span className="font-semibold">{client.name}</span>
+          <div className="space-y-3 text-left">
+            <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-amber-500" />
+                <span className="text-gray-300">Pessoas na sua frente</span>
               </div>
-
-              <div className="flex items-center gap-3 mb-2">
-                <Phone className="w-5 h-5 text-amber-500" />
-                <span className="text-gray-300">{client.phone}</span>
-              </div>
-
+              <span className="text-white font-bold">{position - 1}</span>
+            </div>
+            
+            <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-amber-500" />
-                <span className="text-gray-300">
-                  Esperando há: {getWaitingTime(client.joinedAt)}
-                </span>
+                <span className="text-gray-300">Tempo de espera</span>
               </div>
+              <span className="text-white font-bold">{getWaitingTime(client.joinedAt)}</span>
             </div>
-
-            <div className="bg-black p-4 rounded-xl text-center border border-gray-700">
-              <p className="text-xl text-gray-400 mb-2">Sua posição é:</p>
-              <p className="text-6xl font-bold text-amber-500">{clientIndex + 1}</p>
-            </div>
-
-            <div className="bg-gray-900 p-4 rounded-xl text-center">
-              <div className="flex justify-center items-center gap-2 text-gray-400">
-                <Users className="w-5 h-5" />
-                <span>Total na fila: {queue.length}</span>
+            
+            <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-amber-500" />
+                <span className="text-gray-300">Total na fila</span>
               </div>
+              <span className="text-white font-bold">{queue.length}</span>
             </div>
           </div>
-        ) : (
-          // Cliente não encontrado
-          <div className="text-center text-gray-300 py-16">
-            <Users className="w-16 h-16 mx-auto opacity-50 mb-4" />
-            <p>Não foi possível encontrar seus dados na fila.</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Talvez sua posição já tenha sido atendida.
+
+          <div className="bg-gray-700 rounded-lg p-4">
+            <p className="text-sm text-gray-400">
+              A fila é atualizada automaticamente. Mantenha esta página aberta para acompanhar sua posição em tempo real.
             </p>
           </div>
-        )}
+
+          {/* <button
+            onClick={onBack}
+            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition-colors"
+          >
+            Voltar
+          </button> */}
+        </div>
       </div>
     </div>
   );

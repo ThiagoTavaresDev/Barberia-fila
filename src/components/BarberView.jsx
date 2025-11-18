@@ -97,12 +97,12 @@ export default function BarberView({ queue, onBack }) {
               Entrar
             </button>
             
-            <button
+            {/* <button
               onClick={onBack}
               className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition-colors"
             >
               Voltar
-            </button>
+            </button> */}
           </div>
           
           <p className="text-sm text-gray-500 text-center">Senha padrão: 1234</p>

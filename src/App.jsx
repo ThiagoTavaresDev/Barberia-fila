@@ -1,42 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import SelectView from './components/SelectView';
 import BarberView from './components/BarberView';
 import ClientView from './components/ClientView';
 import { listenQueue } from "./services/queueService";
 
 export default function App() {
-  const [view, setView] = useState('select');
   const [queue, setQueue] = useState([]);
   const [clientId, setClientId] = useState(null);
+  const [isBarber, setIsBarber] = useState(false);
 
-  // Fila em tempo real
+  // Atualização em tempo real do Firestore
   useEffect(() => {
     const unsubscribe = listenQueue(setQueue);
     return () => unsubscribe();
   }, []);
 
-  // Detectar cliente pela URL
+  // Detecta URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const id = params.get("client");
+    const clientParam = params.get("client");
 
-    if (id) {
-      setClientId(id);
-      setView("client");
+    if (window.location.pathname.includes("/barber")) {
+      setIsBarber(true);
+    } else if (clientParam) {
+      setClientId(clientParam);
     }
   }, []);
 
-  const handleSelectView = (view) => setView(view);
+  // Painel do barbeiro
+  if (isBarber) {
+    return <BarberView queue={queue} />;
+  }
 
-  const handleBack = () => {
-    setView('select');
-    setClientId(null);
-    window.history.pushState({}, "", window.location.pathname);
-  };
+  // Tela do cliente
+  if (clientId) {
+    return <ClientView queue={queue} clientId={clientId} />;
+  }
 
-  if (view === 'select') return <SelectView onSelectView={handleSelectView} />;
-  if (view === 'barber') return <BarberView queue={queue} onBack={handleBack} />;
-  if (view === 'client') return <ClientView queue={queue} clientId={clientId} onBack={handleBack} />;
-
-  return null;
+  // URL inválida
+  return (
+    <div className="min-h-screen flex justify-center items-center bg-black text-white">
+      <p>URL inválida.</p>
+    </div>
+  );
 }
