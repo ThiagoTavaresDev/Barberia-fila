@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Scissors, Users, Trash2, CheckCircle, Clock, User, Phone } from 'lucide-react';
-import { addClientToQueue, removeClientFromQueue, completeService } from '../services/storage';
 import { getWaitingTime, generateWhatsAppMessage, generateWhatsAppLink } from '../utils/helpers';
+import { addClient, removeClient, completeFirst } from "../services/queueService";
 
 const BARBER_PASSWORD = '1234';
 
-export default function BarberView({ queue, setQueue, onBack }) {
+export default function BarberView({ queue, onBack }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [barberPassword, setBarberPassword] = useState('');
   const [newClient, setNewClient] = useState({ name: '', phone: '' });
@@ -18,7 +18,8 @@ export default function BarberView({ queue, setQueue, onBack }) {
     }
   };
 
-  const handleAddClient = () => {
+  // 🔥 ADICIONAR CLIENTE
+  const handleAddClient = async () => {
     if (!newClient.name.trim()) {
       alert('Por favor, insira o nome do cliente');
       return;
@@ -28,39 +29,47 @@ export default function BarberView({ queue, setQueue, onBack }) {
       return;
     }
 
-    const result = addClientToQueue(queue, newClient);
-    setQueue(result.queue);
-    
-    const position = result.queue.length;
-    const clientLink = `${window.location.origin}?client=${result.client.id}`;
-    const message = generateWhatsAppMessage(result.client, position, clientLink);
-    const whatsappLink = generateWhatsAppLink(result.client.phone, message);
-    
-    window.open(whatsappLink, '_blank');
-    
+    // Adicionar no Firestore
+    const { id } = await addClient(newClient);
+
+    const position = queue.length + 1;
+    const clientLink = `${window.location.origin}?client=${id}`;
+    const message = generateWhatsAppMessage(
+      { id, ...newClient },
+      position,
+      clientLink
+    );
+
+    const whatsappLink = generateWhatsAppLink(newClient.phone, message);
+
+    // Abre o WhatsApp diretamente
+    window.open(whatsappLink, "_blank");
+
+    // Limpar inputs
     setNewClient({ name: '', phone: '' });
   };
 
-  const handleRemove = (id, name) => {
-    // eslint-disable-next-line no-restricted-globals
-    if (confirm(`Tem certeza que deseja remover ${name} da fila?`)) {
-      const newQueue = removeClientFromQueue(queue, id);
-      setQueue(newQueue);
+  // ❌ REMOVER CLIENTE
+  const handleRemove = async (id, name) => {
+    if (window.confirm
+        (`Tem certeza que deseja remover ${name} da fila?`)) {
+      await removeClient(id);
     }
   };
 
-  const handleComplete = () => {
+  // 🟢 FINALIZAR ATENDIMENTO
+  const handleComplete = async () => {
     if (queue.length === 0) {
       alert('A fila está vazia!');
       return;
     }
-    // eslint-disable-next-line no-restricted-globals
-    if (confirm(`Finalizar atendimento de ${queue[0].name}?`)) {
-      const newQueue = completeService(queue);
-      setQueue(newQueue);
+
+    if (window.confirm(`Finalizar atendimento de ${queue[0].name}?`)) {
+      await completeFirst(queue);
     }
   };
 
+  // 🔐 Tela de login
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
@@ -102,9 +111,11 @@ export default function BarberView({ queue, setQueue, onBack }) {
     );
   }
 
+  // 🟦 Tela principal
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black p-4">
       <div className="max-w-4xl mx-auto space-y-6">
+
         {/* Header */}
         <div className="bg-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
@@ -112,6 +123,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
               <Scissors className="w-8 h-8 text-amber-500" />
               <h1 className="text-3xl font-bold text-white">Painel do Barbeiro</h1>
             </div>
+
             <button
               onClick={() => {
                 setIsAuthenticated(false);
@@ -122,7 +134,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
               Sair
             </button>
           </div>
-          
+
           <div className="flex items-center gap-6 text-gray-300">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-amber-500" />
@@ -136,6 +148,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
         <div className="bg-gray-800 rounded-xl p-6">
           <h2 className="text-xl font-bold text-white mb-4">Adicionar Cliente à Fila</h2>
           <div className="space-y-4">
+
             <div>
               <label className="block text-gray-300 mb-2">Nome do Cliente</label>
               <div className="relative">
@@ -149,7 +162,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
                 />
               </div>
             </div>
-            
+
             <div>
               <label className="block text-gray-300 mb-2">Telefone (WhatsApp)</label>
               <div className="relative">
@@ -163,7 +176,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
                 />
               </div>
             </div>
-            
+
             <button
               onClick={handleAddClient}
               className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
@@ -173,10 +186,10 @@ export default function BarberView({ queue, setQueue, onBack }) {
           </div>
         </div>
 
-        {/* Fila */}
+        {/* Lista */}
         <div className="bg-gray-800 rounded-xl p-6">
           <h2 className="text-xl font-bold text-white mb-4">Fila de Espera</h2>
-          
+
           {queue.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -197,14 +210,17 @@ export default function BarberView({ queue, setQueue, onBack }) {
                     }`}>
                       {index + 1}
                     </div>
+
                     <div>
                       <p className={`font-semibold ${index === 0 ? 'text-white' : 'text-gray-200'}`}>
                         {client.name}
                       </p>
+
                       <div className="flex items-center gap-4 text-sm">
                         <span className={index === 0 ? 'text-amber-100' : 'text-gray-400'}>
                           {client.phone}
                         </span>
+
                         <span className={`flex items-center gap-1 ${index === 0 ? 'text-amber-100' : 'text-gray-400'}`}>
                           <Clock className="w-4 h-4" />
                           {getWaitingTime(client.joinedAt)}
@@ -212,7 +228,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     {index === 0 && (
                       <button
@@ -223,6 +239,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
                         <CheckCircle className="w-5 h-5" />
                       </button>
                     )}
+
                     <button
                       onClick={() => handleRemove(client.id, client.name)}
                       className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
@@ -235,6 +252,7 @@ export default function BarberView({ queue, setQueue, onBack }) {
               ))}
             </div>
           )}
+
         </div>
       </div>
     </div>

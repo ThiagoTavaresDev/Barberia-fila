@@ -2,60 +2,41 @@ import React, { useState, useEffect } from 'react';
 import SelectView from './components/SelectView';
 import BarberView from './components/BarberView';
 import ClientView from './components/ClientView';
-import { loadQueue } from './services/storage';
+import { listenQueue } from "./services/queueService";
 
 export default function App() {
   const [view, setView] = useState('select');
   const [queue, setQueue] = useState([]);
   const [clientId, setClientId] = useState(null);
 
-  // Carregar fila ao iniciar
+  // Fila em tempo real
   useEffect(() => {
-    const savedQueue = loadQueue();
-    setQueue(savedQueue);
+    const unsubscribe = listenQueue(setQueue);
+    return () => unsubscribe();
   }, []);
 
-  // Auto-atualização a cada 5 segundos
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const updatedQueue = loadQueue();
-      setQueue(updatedQueue);
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  // Verificar se há ID de cliente na URL
+  // Detectar cliente pela URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const clientParam = params.get('client');
-    if (clientParam) {
-      setClientId(parseInt(clientParam));
-      setView('client');
+    const id = params.get("client");
+
+    if (id) {
+      setClientId(id);
+      setView("client");
     }
   }, []);
 
-  const handleSelectView = (selectedView) => {
-    setView(selectedView);
-  };
+  const handleSelectView = (view) => setView(view);
 
   const handleBack = () => {
     setView('select');
     setClientId(null);
-    window.history.pushState({}, '', window.location.pathname);
+    window.history.pushState({}, "", window.location.pathname);
   };
 
-  if (view === 'select') {
-    return <SelectView onSelectView={handleSelectView} />;
-  }
-
-  if (view === 'barber') {
-    return <BarberView queue={queue} setQueue={setQueue} onBack={handleBack} />;
-  }
-
-  if (view === 'client') {
-    return <ClientView queue={queue} clientId={clientId} onBack={handleBack} />;
-  }
+  if (view === 'select') return <SelectView onSelectView={handleSelectView} />;
+  if (view === 'barber') return <BarberView queue={queue} onBack={handleBack} />;
+  if (view === 'client') return <ClientView queue={queue} clientId={clientId} onBack={handleBack} />;
 
   return null;
 }

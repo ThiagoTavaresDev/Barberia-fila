@@ -24,7 +24,16 @@ export const getWaitingTime = (joinedAt) => {
   };
   
   // Gerar link do WhatsApp Web
-  export const generateWhatsAppLink = (phone, message) => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    return `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
-  };
+  export function generateWhatsAppLink(phone, message) {
+    // remover tudo que não é número
+    let clean = phone.replace(/\D/g, "");
+  
+    // se não começar com 55, adiciona
+    if (!clean.startsWith("55")) {
+      clean = "55" + clean;
+    }
+  
+    return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
+  }
+  
+  
