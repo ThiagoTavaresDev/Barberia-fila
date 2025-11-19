@@ -19,7 +19,7 @@ import {
   completeFirst,
 } from "../services/queueService";
 
-const BARBER_PASSWORD = "1234";
+const BARBER_PASSWORD = "Diniz1010";
 
 export default function BarberView({ queue, onBack }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -122,9 +122,9 @@ export default function BarberView({ queue, onBack }) {
             </button> */}
           </div>
 
-          <p className="text-sm text-gray-500 text-center">
+          {/* <p className="text-sm text-gray-500 text-center">
             Senha padrão: 1234
-          </p>
+          </p> */}
         </div>
       </div>
     );
@@ -147,7 +147,7 @@ export default function BarberView({ queue, onBack }) {
             <button
               onClick={() => {
                 setIsAuthenticated(false);
-                onBack();
+                window.location.href = "/barber"; // recarrega login
               }}
               className="text-gray-400 hover:text-white transition-colors"
             >

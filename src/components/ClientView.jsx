@@ -17,12 +17,12 @@ export default function ClientView({ queue, clientId, onBack }) {
           <p className="text-gray-400">
             Você não está na fila ou seu atendimento já foi concluído.
           </p>
-          <button
+          {/* <button
             onClick={onBack}
             className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
           >
             Voltar ao Início
-          </button>
+          </button> */}
         </div>
       </div>
     );
@@ -35,12 +35,19 @@ export default function ClientView({ queue, clientId, onBack }) {
           <Scissors className="w-16 h-16 mx-auto text-amber-500" />
           <h2 className="text-3xl font-bold text-white">Olá, {client.name}!</h2>
 
-          <div className="bg-gradient-to-r from-amber-600 to-amber-500 rounded-xl p-8">
-            <p className="text-amber-100 text-sm uppercase tracking-wide mb-2">
-              Sua posição na fila
+          <div className="relative overflow-hidden rounded-xl p-8 bg-gradient-to-r from-amber-600 to-amber-500">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent 
+                animate-shimmer"></div>
+
+            <p className="text-amber-100 text-sm uppercase tracking-wide mb-2 relative z-10">
+                Sua posição na fila
             </p>
-            <p className="text-6xl font-bold text-white">{position}º</p>
-          </div>
+
+            <p className="text-6xl font-bold text-white relative z-10">
+                {position}º
+            </p>
+        </div>
+
 
           <div className="space-y-3 text-left">
             <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">

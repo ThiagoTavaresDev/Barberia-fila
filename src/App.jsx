@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import BarberView from './components/BarberView';
-import ClientView from './components/ClientView';
+import React, { useState, useEffect } from "react";
+import BarberView from "./components/BarberView";
+import ClientView from "./components/ClientView";
 import { listenQueue } from "./services/queueService";
 
 export default function App() {
