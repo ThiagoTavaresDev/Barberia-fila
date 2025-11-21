@@ -79,7 +79,7 @@ export default function BarberView() {
     serviceId: "",
   });
 
-  const BARBER_PASSWORD = "Diniz1010"; // Em produção, usar env var ou auth real
+  const BARBER_PASSWORD = process.env.REACT_APP_BARBER_PASSWORD || ""; // Senha vem do .env
 
   useEffect(() => {
     console.log("Setting up listeners...");
