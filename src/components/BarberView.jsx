@@ -19,7 +19,7 @@ import {
   completeFirst,
 } from "../services/queueService";
 
-const BARBER_PASSWORD = "Diniz1010";
+const BARBER_PASSWORD = process.env.REACT_APP_BARBER_PASSWORD;
 
 export default function BarberView({ queue, onBack }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -229,26 +229,23 @@ export default function BarberView({ queue, onBack }) {
               {queue.map((client, index) => (
                 <div
                   key={client.id}
-                  className={`p-4 rounded-lg flex items-center justify-between ${
-                    index === 0 ? "bg-amber-600" : "bg-gray-700"
-                  }`}
+                  className={`p-4 rounded-lg flex items-center justify-between ${index === 0 ? "bg-amber-600" : "bg-gray-700"
+                    }`}
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                        index === 0
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${index === 0
                           ? "bg-amber-700 text-white"
                           : "bg-gray-600 text-gray-300"
-                      }`}
+                        }`}
                     >
                       {index + 1}
                     </div>
 
                     <div>
                       <p
-                        className={`font-semibold ${
-                          index === 0 ? "text-white" : "text-gray-200"
-                        }`}
+                        className={`font-semibold ${index === 0 ? "text-white" : "text-gray-200"
+                          }`}
                       >
                         {client.name}
                       </p>
@@ -263,9 +260,8 @@ export default function BarberView({ queue, onBack }) {
                         </span>
 
                         <span
-                          className={`flex items-center gap-1 ${
-                            index === 0 ? "text-amber-100" : "text-gray-400"
-                          }`}
+                          className={`flex items-center gap-1 ${index === 0 ? "text-amber-100" : "text-gray-400"
+                            }`}
                         >
                           <Clock className="w-4 h-4" />
                           {getWaitingTime(client.joinedAt)}

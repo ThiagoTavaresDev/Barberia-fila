@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 // COLE AQUI SUA CONFIGURAÇÃO DO FIREBASE
 const firebaseConfig = {
-    apiKey: "AIzaSyBf9KcB-xI2aA_l-IJJfpb9pt6UsSNJ4rY",
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
     authDomain: "barber-fila.firebaseapp.com",
     projectId: "barber-fila",
     storageBucket: "barber-fila.firebasestorage.app",
