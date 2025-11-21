@@ -77,9 +77,9 @@ export default function ClientView({ queue, clientId, onBack }) {
         frame();
 
         // Som (Corneta)
-        const audio = new Audio(tadaSound);
-        audio.volume = 0.5;
-        audio.play().catch((e) => console.log("Audio play failed (user interaction needed first):", e));
+        // const audio = new Audio(tadaSound);
+        // audio.volume = 0.5;
+        // audio.play().catch((e) => console.log("Audio play failed (user interaction needed first):", e));
       }
     } else {
       // Resetar flag se sair da posição 1
