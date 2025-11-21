@@ -1,28 +1,132 @@
-import React from "react";
-import { Scissors, Users, Clock } from "lucide-react";
-import { getClientPosition, getWaitingTime } from "../utils/helpers";
+import React, { useEffect, useState, useRef } from "react";
+import { Scissors, Users, Clock, Bell, Instagram } from "lucide-react";
+import confetti from "canvas-confetti";
+import {
+  getClientPosition,
+  calculateEstimatedWait,
+  formatDuration,
+  requestNotificationPermission,
+  sendNotification,
+} from "../utils/helpers";
+import tadaSound from "../sounds/ta-da.mp3";
 
 export default function ClientView({ queue, clientId, onBack }) {
+  const [notificationPermission, setNotificationPermission] = useState(
+    Notification.permission === "granted"
+  );
+
+  // Ref para controlar se o efeito já foi disparado para a posição 1
+  const hasCelebratedRef = useRef(false);
+
   const position = clientId ? getClientPosition(queue, clientId) : 0;
   const client = queue.find((c) => c.id === clientId);
+  const clientIndex = queue.findIndex((c) => c.id === clientId);
+
+  // Calcular tempo estimado de espera (soma dos serviços anteriores)
+  const estimatedWaitMinutes = calculateEstimatedWait(queue, clientIndex);
+
+  // Solicitar permissão de notificação ao carregar
+  useEffect(() => {
+    if (clientId) {
+      requestNotificationPermission().then(setNotificationPermission);
+    }
+  }, [clientId]);
+
+  // Efeitos quando chega a vez (Posição 1)
+  useEffect(() => {
+    if (position === 1) {
+      // Notificação
+      if (notificationPermission) {
+        sendNotification(
+          "É a sua vez!",
+          "Dirija-se à cadeira do barbeiro para o seu atendimento."
+        );
+      }
+
+      // Celebração (Confete + Som)
+      if (!hasCelebratedRef.current) {
+        hasCelebratedRef.current = true;
+
+        // Confete
+        const duration = 1500;
+        const end = Date.now() + duration;
+
+        const frame = () => {
+          // Cores laranja (Amber do Tailwind)
+          const colors = ['#f59e0b', '#d97706', '#b45309'];
+
+          confetti({
+            particleCount: 1,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: colors,
+          });
+          confetti({
+            particleCount: 1,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: colors,
+          });
+
+          if (Date.now() < end) {
+            requestAnimationFrame(frame);
+          }
+        };
+        frame();
+
+        // Som (Corneta)
+        const audio = new Audio(tadaSound);
+        audio.volume = 0.5;
+        audio.play().catch((e) => console.log("Audio play failed (user interaction needed first):", e));
+      }
+    } else {
+      // Resetar flag se sair da posição 1
+      hasCelebratedRef.current = false;
+    }
+  }, [position, notificationPermission]);
+
+  const handleEnableNotifications = async () => {
+    const granted = await requestNotificationPermission();
+    setNotificationPermission(granted);
+    if (granted) {
+      sendNotification("Notificações Ativadas", "Você será avisado quando chegar sua vez!");
+
+      // Tocar som para testar e desbloquear o áudio do navegador
+      const audio = new Audio(tadaSound);
+      audio.volume = 0.5;
+      audio.play().catch((e) => console.log("Audio test failed:", e));
+    }
+  };
 
   if (!clientId || position === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
-          <Scissors className="w-16 h-16 mx-auto text-amber-500" />
+          <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Scissors className="w-10 h-10 text-amber-500" />
+          </div>
+
           <h2 className="text-2xl font-bold text-white">
-            Cliente não encontrado
+            Atendimento Finalizado
           </h2>
-          <p className="text-gray-400">
-            Você não está na fila ou seu atendimento já foi concluído.
+
+          <p className="text-gray-300 text-lg leading-relaxed">
+            Obrigado pela confiança no nosso serviço, até o próximo atendimento!
           </p>
-          {/* <button
-            onClick={onBack}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
-          >
-            Voltar ao Início
-          </button> */}
+
+          <div className="pt-4">
+            <a
+              href="https://instagram.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+            >
+              <Instagram className="w-6 h-6" />
+              <span>Siga nosso Instagram</span>
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -35,19 +139,25 @@ export default function ClientView({ queue, clientId, onBack }) {
           <Scissors className="w-16 h-16 mx-auto text-amber-500" />
           <h2 className="text-3xl font-bold text-white">Olá, {client.name}!</h2>
 
-          <div className="relative overflow-hidden rounded-xl p-8 bg-gradient-to-r from-amber-600 to-amber-500">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent 
-                animate-shimmer"></div>
+          <div
+            className={`relative overflow-hidden rounded-xl p-8 ${position === 1
+              ? "bg-gradient-to-r from-green-600 to-green-500"
+              : "bg-gradient-to-r from-amber-600 to-amber-500"
+              }`}
+          >
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent 
+                animate-shimmer"
+            ></div>
 
             <p className="text-amber-100 text-sm uppercase tracking-wide mb-2 relative z-10">
-                Sua posição na fila
+              Sua posição na fila
             </p>
 
             <p className="text-6xl font-bold text-white relative z-10">
-                {position}º
+              {position}º
             </p>
-        </div>
-
+          </div>
 
           <div className="space-y-3 text-left">
             <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
@@ -61,21 +171,25 @@ export default function ClientView({ queue, clientId, onBack }) {
             <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-amber-500" />
-                <span className="text-gray-300">Tempo de espera</span>
+                <span className="text-gray-300">Tempo estimado</span>
               </div>
               <span className="text-white font-bold">
-                {getWaitingTime(client.joinedAt)}
+                {position === 1
+                  ? "É a sua vez!"
+                  : formatDuration(estimatedWaitMinutes)}
               </span>
             </div>
-
-            <div className="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Users className="w-5 h-5 text-amber-500" />
-                <span className="text-gray-300">Total na fila</span>
-              </div>
-              <span className="text-white font-bold">{queue.length}</span>
-            </div>
           </div>
+
+          {!notificationPermission && (
+            <button
+              onClick={handleEnableNotifications}
+              className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-amber-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group"
+            >
+              <Bell className="w-6 h-6 group-hover:animate-bounce" />
+              <span className="text-lg">Ativar Notificações e Som</span>
+            </button>
+          )}
 
           <div className="bg-gray-700 rounded-lg p-4">
             <p className="text-sm text-gray-400">
@@ -83,13 +197,6 @@ export default function ClientView({ queue, clientId, onBack }) {
               para acompanhar sua posição em tempo real.
             </p>
           </div>
-
-          {/* <button
-            onClick={onBack}
-            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition-colors"
-          >
-            Voltar
-          </button> */}
         </div>
       </div>
     </div>
