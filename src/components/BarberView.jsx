@@ -488,7 +488,7 @@ export default function BarberView({ queue, onBack }) {
             </div>
 
             <div className="space-y-4">
-              <div className="flex gap-2">
+              <div className="flex flex-col md:flex-row gap-2">
                 <input
                   type="text"
                   value={newService.name}
@@ -496,23 +496,25 @@ export default function BarberView({ queue, onBack }) {
                     setNewService({ ...newService, name: e.target.value })
                   }
                   placeholder="Nome do serviço"
-                  className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full md:flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
-                <input
-                  type="number"
-                  value={newService.duration}
-                  onChange={(e) =>
-                    setNewService({ ...newService, duration: e.target.value })
-                  }
-                  placeholder="Min"
-                  className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-                <button
-                  onClick={handleAddService}
-                  className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg"
-                >
-                  <Plus className="w-6 h-6" />
-                </button>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={newService.duration}
+                    onChange={(e) =>
+                      setNewService({ ...newService, duration: e.target.value })
+                    }
+                    placeholder="Min"
+                    className="flex-1 md:w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <button
+                    onClick={handleAddService}
+                    className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg flex-shrink-0"
+                  >
+                    <Plus className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 max-h-60 overflow-y-auto">

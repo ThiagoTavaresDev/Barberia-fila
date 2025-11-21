@@ -88,15 +88,25 @@ export default function ClientView({ queue, clientId, onBack }) {
   }, [position, notificationPermission]);
 
   const handleEnableNotifications = async () => {
-    const granted = await requestNotificationPermission();
-    setNotificationPermission(granted);
-    if (granted) {
-      sendNotification("Notificações Ativadas", "Você será avisado quando chegar sua vez!");
+    try {
+      const granted = await requestNotificationPermission();
+      setNotificationPermission(granted);
 
-      // Tocar som para testar e desbloquear o áudio do navegador
-      const audio = new Audio(tadaSound);
-      audio.volume = 0.5;
-      audio.play().catch((e) => console.log("Audio test failed:", e));
+      if (granted) {
+        sendNotification("Notificações Ativadas", "Você será avisado quando chegar sua vez!");
+
+        // Tocar som para testar e desbloquear o áudio do navegador
+        try {
+          const audio = new Audio(tadaSound);
+          audio.volume = 0.5;
+          await audio.play();
+        } catch (audioError) {
+          console.log("Audio test failed:", audioError);
+        }
+      }
+    } catch (error) {
+      console.error("Error enabling notifications:", error);
+      alert("Não foi possível ativar as notificações. Verifique as permissões do seu navegador.");
     }
   };
 
@@ -118,7 +128,7 @@ export default function ClientView({ queue, clientId, onBack }) {
 
           <div className="pt-4">
             <a
-              href="https://instagram.com"
+              href="https://www.instagram.com/diniz_barbershoper/"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
