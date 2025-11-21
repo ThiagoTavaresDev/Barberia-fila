@@ -829,33 +829,32 @@ export default function BarberView() {
                   placeholder="Nome do serviço"
                   className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
                 />
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={newService.duration}
-                    onChange={(e) =>
-                      setNewService({ ...newService, duration: e.target.value })
-                    }
-                    placeholder="Minutos"
-                    className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
-                  />
-                  <input
-                    type="number"
-                    value={newService.price}
-                    onChange={(e) =>
-                      setNewService({ ...newService, price: e.target.value })
-                    }
-                    placeholder="Preço (R$)"
-                    className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
-                  />
-                  <button
-                    onClick={handleAddService}
-                    className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg flex-shrink-0"
-                    title="Adicionar serviço"
-                  >
-                    <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </button>
-                </div>
+                <input
+                  type="number"
+                  value={newService.duration}
+                  onChange={(e) =>
+                    setNewService({ ...newService, duration: e.target.value })
+                  }
+                  placeholder="Duração (minutos)"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
+                />
+                <input
+                  type="number"
+                  value={newService.price}
+                  onChange={(e) =>
+                    setNewService({ ...newService, price: e.target.value })
+                  }
+                  placeholder="Preço (R$)"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
+                />
+                <button
+                  onClick={handleAddService}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 font-medium"
+                  title="Adicionar serviço"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Adicionar Serviço</span>
+                </button>
               </div>
 
               {/* Lista de Serviços */}
