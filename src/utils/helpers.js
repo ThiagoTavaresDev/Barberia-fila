@@ -93,10 +93,14 @@ export const requestNotificationPermission = async () => {
 
 // Enviar notificação
 export const sendNotification = (title, body) => {
-  if (Notification.permission === "granted") {
-    new Notification(title, {
-      body,
-      icon: "/favicon.ico" // ou outro ícone
-    });
+  try {
+    if (Notification.permission === "granted") {
+      new Notification(title, {
+        body,
+        icon: "/favicon.ico" // ou outro ícone
+      });
+    }
+  } catch (error) {
+    console.error("Error sending notification:", error);
   }
 };

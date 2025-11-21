@@ -48,38 +48,38 @@ export default function ClientView({ queue, clientId, onBack }) {
         hasCelebratedRef.current = true;
 
         // Confete
-        // const duration = 1500;
-        // const end = Date.now() + duration;
+        const duration = 1500;
+        const end = Date.now() + duration;
 
-        // const frame = () => {
-        //   // Cores laranja (Amber do Tailwind)
-        //   // const colors = ['#f59e0b', '#d97706', '#b45309'];
+        const frame = () => {
+          // Cores laranja (Amber do Tailwind)
+          const colors = ['#f59e0b', '#d97706', '#b45309'];
 
-        //   // confetti({
-        //   //   particleCount: 1,
-        //   //   angle: 60,
-        //   //   spread: 55,
-        //   //   origin: { x: 0 },
-        //   //   colors: colors,
-        //   // });
-        //   // confetti({
-        //   //   particleCount: 1,
-        //   //   angle: 120,
-        //   //   spread: 55,
-        //   //   origin: { x: 1 },
-        //   //   colors: colors,
-        //   // });
+          confetti({
+            particleCount: 1,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: colors,
+          });
+          confetti({
+            particleCount: 1,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: colors,
+          });
 
-        //   // if (Date.now() < end) {
-        //   //   requestAnimationFrame(frame);
-        //   // }
-        // };
-        // frame();
+          if (Date.now() < end) {
+            requestAnimationFrame(frame);
+          }
+        };
+        frame();
 
         // Som (Corneta)
-        // const audio = new Audio(tadaSound);
-        // audio.volume = 0.5;
-        // audio.play().catch((e) => console.log("Audio play failed (user interaction needed first):", e));
+        const audio = new Audio(tadaSound);
+        audio.volume = 0.5;
+        audio.play().catch((e) => console.log("Audio play failed (user interaction needed first):", e));
       }
     } else {
       // Resetar flag se sair da posição 1
