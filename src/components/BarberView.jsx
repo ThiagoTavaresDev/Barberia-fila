@@ -14,6 +14,13 @@ import {
   ArrowUp,
   ArrowDown,
   MessageCircle,
+  History,
+  DollarSign,
+  Star,
+  Calendar,
+  CalendarClock,
+  XCircle,
+  PlayCircle
 } from "lucide-react";
 import {
   getWaitingTime,
@@ -24,51 +31,81 @@ import {
   getClientPosition,
 } from "../utils/helpers";
 import {
-  addClient,
-  removeClient,
-  completeFirst,
-  listenServices,
   addService,
   removeService,
+  listenServices,
+  addClient,
+  removeClient,
   moveClient,
+  completeFirst,
+  listenQueue,
+  addAppointment,
+  listenAppointments,
+  moveAppointmentToQueue,
+  cancelAppointment,
+  cancelClient,
+  getFullHistory
 } from "../services/queueService";
 
-const BARBER_PASSWORD = process.env.REACT_APP_BARBER_PASSWORD;
-
-export default function BarberView({ queue, onBack }) {
+export default function BarberView() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [barberPassword, setBarberPassword] = useState("");
+  const [queue, setQueue] = useState([]);
   const [services, setServices] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [currentView, setCurrentView] = useState("queue"); // "queue", "appointments", "history"
+  const [history, setHistory] = useState([]);
 
-  // Estado para novo cliente
   const [newClient, setNewClient] = useState({
     name: "",
     phone: "",
-    noPhone: false, // Novo estado
+    noPhone: false,
     serviceId: "",
   });
 
-  // Estado para novo serviço
   const [newService, setNewService] = useState({
     name: "",
     duration: "",
+    price: "",
   });
 
-  // Carregar serviços
+  const [newAppointment, setNewAppointment] = useState({
+    name: "",
+    phone: "",
+    date: "",
+    time: "",
+    serviceId: "",
+  });
+
+  const BARBER_PASSWORD = "Diniz1010"; // Em produção, usar env var ou auth real
+
   useEffect(() => {
-    const unsubscribe = listenServices((list) => {
-      setServices(list);
-      // Se não tiver serviço selecionado e a lista não for vazia, seleciona o primeiro
-      if (!newClient.serviceId && list.length > 0) {
-        setNewClient((prev) => ({ ...prev, serviceId: list[0].id }));
-      }
+    console.log("Setting up listeners...");
+    const unsubscribeQueue = listenQueue(setQueue);
+    const unsubscribeServices = listenServices(setServices);
+    const unsubscribeAppointments = listenAppointments((apps) => {
+      console.log("Appointments updated:", apps);
+      setAppointments(apps);
     });
-    return () => unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      unsubscribeQueue();
+      unsubscribeServices();
+      unsubscribeAppointments();
+    };
   }, []);
-  // Adicionei o comentário acima para suprimir o warning, pois queremos que rode apenas uma vez ou quando newClient.serviceId mudar logicamente, mas aqui é inicialização.
-  // Na verdade, a lógica de selecionar o primeiro deve rodar quando 'list' muda.
+
+  const loadHistory = async () => {
+    const fullHistory = await getFullHistory();
+    setHistory(fullHistory);
+  };
+
+  useEffect(() => {
+    if (currentView === "history") {
+      loadHistory();
+    }
+  }, [currentView]);
 
   const handleLogin = () => {
     if (barberPassword === BARBER_PASSWORD) {
@@ -103,6 +140,7 @@ export default function BarberView({ queue, onBack }) {
       phone: newClient.noPhone ? "" : newClient.phone, // Salva vazio se não tiver fone
       serviceName: selectedService.name,
       serviceDuration: selectedService.duration,
+      servicePrice: selectedService.price,
     };
 
     // Adicionar no Firestore
@@ -127,9 +165,9 @@ export default function BarberView({ queue, onBack }) {
 
   // ⚙️ GERENCIAR SERVIÇOS
   const handleAddService = async () => {
-    if (!newService.name || !newService.duration) return;
-    await addService(newService.name, newService.duration);
-    setNewService({ name: "", duration: "" });
+    if (!newService.name || !newService.duration || !newService.price) return;
+    await addService(newService.name, newService.duration, newService.price);
+    setNewService({ name: "", duration: "", price: "" });
   };
 
   const handleRemoveService = async (id) => {
@@ -169,6 +207,70 @@ export default function BarberView({ queue, onBack }) {
     const message = generateStatusMessage(client, position, clientLink);
     const whatsappLink = generateWhatsAppLink(client.phone, message);
     window.open(whatsappLink, "_blank");
+  };
+
+  // 📅 GERENCIAR AGENDAMENTOS
+  const handleAddAppointment = async () => {
+    try {
+      if (!newAppointment.name || !newAppointment.date || !newAppointment.time) {
+        alert("Por favor, preencha nome, data e horário");
+        return;
+      }
+
+      console.log("Creating appointment with data:", newAppointment);
+
+      const selectedService = services.find(s => s.id === newAppointment.serviceId);
+
+      // Converter data para timestamp
+      const [year, month, day] = newAppointment.date.split("-");
+      const dateObj = new Date(year, month - 1, day);
+      const scheduledDate = dateObj.getTime();
+
+      const appointmentData = {
+        name: newAppointment.name,
+        phone: newAppointment.phone,
+        scheduledDate,
+        scheduledTime: newAppointment.time,
+        serviceName: selectedService?.name || "",
+        serviceDuration: selectedService?.duration || 0,
+        servicePrice: selectedService?.price || 0,
+      };
+
+      console.log("Appointment data to save:", appointmentData);
+
+      const result = await addAppointment(appointmentData);
+      console.log("Appointment created successfully:", result);
+
+      setNewAppointment({ name: "", phone: "", date: "", time: "", serviceId: "" });
+      setShowAppointmentModal(false);
+
+      alert("Agendamento criado com sucesso!");
+    } catch (error) {
+      console.error("Error creating appointment:", error);
+      alert("Erro ao criar agendamento: " + error.message);
+    }
+  };
+
+  const handleMoveToQueue = async (appointment) => {
+    if (window.confirm(`Iniciar atendimento de ${appointment.name}?`)) {
+      await moveAppointmentToQueue(appointment);
+    }
+  };
+
+  const handleCancelAppointment = async (id, name) => {
+    if (window.confirm(`Cancelar agendamento de ${name}?`)) {
+      await cancelAppointment(id);
+    }
+  };
+
+  const handleCancelClient = async (id, name) => {
+    if (window.confirm(`Cancelar atendimento de ${name}?`)) {
+      await cancelClient(id);
+      // Recarregar histórico se estiver na view de histórico
+      if (currentView === "history") {
+        loadHistory();
+      }
+    }
   };
 
   // Calcular tempo total estimado da fila
@@ -218,264 +320,490 @@ export default function BarberView({ queue, onBack }) {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Scissors className="w-8 h-8 text-amber-500" />
-              <h1 className="text-3xl font-bold text-white">
-                Painel do Barbeiro
-              </h1>
+              <h1 className="text-2xl font-bold text-white">Painel do Barbeiro</h1>
             </div>
-
-            <div className="flex items-center gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setShowServiceModal(true)}
-                className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-colors flex items-center gap-2"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
               >
-                <Settings className="w-5 h-5" />
-                <span className="hidden md:inline">Serviços</span>
+                <Settings className="w-4 h-4" />
+                Serviços
               </button>
               <button
-                onClick={() => {
-                  setIsAuthenticated(false);
-                  window.location.href = "/barber";
-                }}
-                className="text-gray-400 hover:text-white transition-colors"
+                onClick={() => setIsAuthenticated(false)}
+                className="text-gray-400 hover:text-white transition-colors px-4 py-2"
               >
                 Sair
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-6 text-gray-300">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-amber-500" />
-              <span className="font-semibold">{queue.length}</span>
-              <span>na fila</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-amber-500" />
-              <span className="font-semibold">{formatDuration(totalQueueTime)}</span>
-              <span>total estimado</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Adicionar cliente */}
-        <div className="bg-gray-800 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4">
-            Adicionar Cliente à Fila
-          </h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-gray-300 mb-2">
-                  Nome do Cliente
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={newClient.name}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, name: e.target.value })
-                    }
-                    placeholder="Digite o nome"
-                    className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-300 mb-2">
-                  Telefone (WhatsApp)
-                </label>
-                <div className="relative mb-2">
-                  <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <input
-                    type="tel"
-                    value={newClient.phone}
-                    disabled={newClient.noPhone}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, phone: e.target.value })
-                    }
-                    placeholder="(11) 99999-9999"
-                    className={`w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 ${newClient.noPhone ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  />
-                </div>
-                <label className="flex items-center cursor-pointer group">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      id="noPhone"
-                      className="sr-only peer"
-                      checked={newClient.noPhone}
-                      onChange={(e) =>
-                        setNewClient({
-                          ...newClient,
-                          noPhone: e.target.checked,
-                          phone: e.target.checked ? "" : newClient.phone,
-                        })
-                      }
-                    />
-                    <div className="w-10 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-                  </div>
-                  <span className="ml-3 text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                    Sem celular (Criança/Outros)
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-gray-300 mb-2">
-                Tipo de Serviço
-              </label>
-              <div className="relative">
-                <Briefcase className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <select
-                  value={newClient.serviceId}
-                  onChange={(e) =>
-                    setNewClient({ ...newClient, serviceId: e.target.value })
-                  }
-                  className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none"
-                >
-                  {services.length === 0 && <option>Nenhum serviço cadastrado</option>}
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} ({service.duration} min)
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
+          {/* Tab Navigation */}
+          <div className="flex gap-2 mb-4">
             <button
-              onClick={handleAddClient}
-              disabled={services.length === 0}
-              className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors"
+              onClick={() => setCurrentView("queue")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${currentView === "queue"
+                ? "bg-amber-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
             >
-              Adicionar à Fila
+              <Users className="w-4 h-4" />
+              Fila ({queue.length})
+            </button>
+            <button
+              onClick={() => setCurrentView("appointments")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${currentView === "appointments"
+                ? "bg-amber-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+            >
+              <Calendar className="w-4 h-4" />
+              Agendamentos ({appointments.length})
+            </button>
+            <button
+              onClick={() => setCurrentView("history")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${currentView === "history"
+                ? "bg-amber-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+            >
+              <History className="w-4 h-4" />
+              Histórico
             </button>
           </div>
-        </div>
 
-        {/* Lista */}
-        <div className="bg-gray-800 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Fila de Espera</h2>
-
-          {queue.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>Nenhum cliente na fila</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {queue.map((client, index) => (
-                <div
-                  key={client.id}
-                  className={`p-4 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${index === 0 ? "bg-amber-600" : "bg-gray-700"
-                    }`}
-                >
-                  <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 ${index === 0
-                        ? "bg-amber-700 text-white"
-                        : "bg-gray-600 text-gray-300"
-                        }`}
-                    >
-                      {index + 1}
-                    </div>
-
-                    <div>
-                      <p
-                        className={`font-semibold ${index === 0 ? "text-white" : "text-gray-200"
-                          }`}
-                      >
-                        {client.name}
-                      </p>
-
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                        <span
-                          className={
-                            index === 0 ? "text-amber-100" : "text-gray-400"
-                          }
-                        >
-                          {client.phone || "Sem celular"}
-                        </span>
-
-                        <span
-                          className={`flex items-center gap-1 ${index === 0 ? "text-amber-100" : "text-gray-400"
-                            }`}
-                        >
-                          <Briefcase className="w-4 h-4" />
-                          {client.serviceName}
-                        </span>
-
-                        <span
-                          className={`flex items-center gap-1 ${index === 0 ? "text-amber-100" : "text-gray-400"
-                            }`}
-                        >
-                          <Clock className="w-4 h-4" />
-                          {getWaitingTime(client.joinedAt)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end md:self-auto">
-                    {/* Botões de Reordenar */}
-                    <div className="flex items-center mr-2 bg-black/20 rounded-lg">
-                      <button
-                        onClick={() => handleMove(client, "up")}
-                        disabled={index === 0}
-                        className="p-2 hover:text-amber-300 disabled:opacity-30 disabled:hover:text-inherit transition-colors"
-                      >
-                        <ArrowUp className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleMove(client, "down")}
-                        disabled={index === queue.length - 1}
-                        className="p-2 hover:text-amber-300 disabled:opacity-30 disabled:hover:text-inherit transition-colors"
-                      >
-                        <ArrowDown className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {client.phone && (
-                      <button
-                        onClick={() => handleResendMessage(client)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors"
-                        title="Reenviar mensagem WhatsApp"
-                      >
-                        <MessageCircle className="w-5 h-5" />
-                      </button>
-                    )}
-
-                    {index === 0 && (
-                      <button
-                        onClick={handleComplete}
-                        className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-colors"
-                        title="Finalizar atendimento"
-                      >
-                        <CheckCircle className="w-5 h-5" />
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => handleRemove(client.id, client.name)}
-                      className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
-                      title="Remover da fila"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+          {currentView === "queue" && (
+            <div className="flex items-center gap-6 text-gray-300">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-amber-500" />
+                <span className="font-semibold">{queue.length}</span>
+                <span>na fila</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-500" />
+                <span className="font-semibold">{formatDuration(totalQueueTime)}</span>
+                <span>total estimado</span>
+              </div>
             </div>
           )}
         </div>
+
+        {/* � QUEUE VIEW */}
+        {currentView === "queue" && (
+          <>
+            {/* Adicionar cliente */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4">
+                Adicionar Cliente à Fila
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 mb-2">
+                      Nome do Cliente
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={newClient.name}
+                        onChange={(e) =>
+                          setNewClient({ ...newClient, name: e.target.value })
+                        }
+                        placeholder="Digite o nome"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-300 mb-2">
+                      Telefone (WhatsApp)
+                    </label>
+                    <div className="relative mb-2">
+                      <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                      <input
+                        type="tel"
+                        value={newClient.phone}
+                        disabled={newClient.noPhone}
+                        onChange={(e) =>
+                          setNewClient({ ...newClient, phone: e.target.value })
+                        }
+                        placeholder="(11) 99999-9999"
+                        className={`w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 ${newClient.noPhone ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      />
+                    </div>
+                    <label className="flex items-center cursor-pointer group">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          id="noPhone"
+                          className="sr-only peer"
+                          checked={newClient.noPhone}
+                          onChange={(e) =>
+                            setNewClient({
+                              ...newClient,
+                              noPhone: e.target.checked,
+                              phone: e.target.checked ? "" : newClient.phone,
+                            })
+                          }
+                        />
+                        <div className="w-10 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                      </div>
+                      <span className="ml-3 text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+                        Sem celular (Criança/Outros)
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">
+                    Tipo de Serviço
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <select
+                      value={newClient.serviceId}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, serviceId: e.target.value })
+                      }
+                      className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none"
+                    >
+                      <option value="">Selecione um serviço</option>
+                      {services.length === 0 && <option disabled>Nenhum serviço cadastrado</option>}
+                      {services.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} ({service.duration} min - R$ {service.price})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAddClient}
+                  disabled={services.length === 0}
+                  className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors"
+                >
+                  Adicionar à Fila
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de espera */}
+            <div className="space-y-4">
+              {queue.length === 0 ? (
+                <div className="bg-gray-800 rounded-xl p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">
+                    Fila Vazia
+                  </h3>
+                  <p className="text-gray-400">
+                    Adicione clientes para começar o atendimento
+                  </p>
+                </div>
+              ) : (
+                queue.map((client, index) => (
+                  <div
+                    key={client.id}
+                    className={`relative bg-gray-800 rounded-xl p-6 transition-all ${index === 0 ? "border-2 border-amber-500 shadow-lg shadow-amber-500/10" : ""
+                      }`}
+                  >
+                    {index === 0 && (
+                      <div className="absolute -top-3 left-6 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                        <Scissors className="w-3 h-3" />
+                        EM ATENDIMENTO
+                      </div>
+                    )}
+
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${index === 0
+                            ? "bg-amber-500 text-white"
+                            : "bg-gray-700 text-gray-300"
+                            }`}
+                        >
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-white">
+                            {client.name}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400 mt-1">
+                            <div className="flex items-center gap-1">
+                              <Briefcase className="w-4 h-4" />
+                              {client.serviceName}
+                              {client.servicePrice && ` - R$ ${client.servicePrice}`}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              {client.serviceDuration} min
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4 text-gray-500" />
+                              Espere: {getWaitingTime(client.joinedAt)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full md:w-auto">
+                        {index === 0 ? (
+                          <button
+                            onClick={handleComplete}
+                            className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                            Finalizar
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleMove(client, "up")}
+                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleMove(client, "down")}
+                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="w-5 h-5" />
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          onClick={() => handleResendMessage(client)}
+                          className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-colors"
+                          title="Reenviar mensagem"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleCancelClient(client.id, client.name)}
+                          className="p-2 text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 rounded-lg transition-colors"
+                          title="Cancelar atendimento"
+                        >
+                          <XCircle className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleRemove(client.id, client.name)}
+                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
+                          title="Remover da fila"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {/* 📅 APPOINTMENTS VIEW */}
+        {currentView === "appointments" && (
+          <div className="space-y-6">
+            {/* Botão Adicionar Agendamento */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowAppointmentModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Novo Agendamento
+              </button>
+            </div>
+
+            {/* Lista de Agendamentos */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4">Agendamentos</h2>
+              <div className="space-y-3">
+                {appointments.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Nenhum agendamento pendente.</p>
+                ) : (
+                  appointments.map((appointment) => {
+                    const date = new Date(appointment.scheduledDate);
+                    const dateStr = date.toLocaleDateString('pt-BR');
+                    const isToday = date.toDateString() === new Date().toDateString();
+
+                    return (
+                      <div key={appointment.id} className="bg-gray-700/50 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-white font-bold">{appointment.name}</h3>
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400 mt-1">
+                              <div className="flex items-center gap-1">
+                                <CalendarClock className="w-4 h-4" />
+                                {dateStr} às {appointment.scheduledTime}
+                              </div>
+                              {appointment.serviceName && (
+                                <>
+                                  <span>•</span>
+                                  <span>{appointment.serviceName}</span>
+                                </>
+                              )}
+                              {appointment.phone && (
+                                <>
+                                  <span>•</span>
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="w-4 h-4" />
+                                    {appointment.phone}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            {isToday && (
+                              <span className="inline-block mt-2 px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs font-medium">
+                                Hoje
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleMoveToQueue(appointment)}
+                              className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                              title="Iniciar atendimento"
+                            >
+                              <PlayCircle className="w-4 h-4" />
+                              Iniciar
+                            </button>
+                            <button
+                              onClick={() => handleCancelAppointment(appointment.id, appointment.name)}
+                              className="p-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
+                              title="Cancelar agendamento"
+                            >
+                              <XCircle className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 📜 HISTORY VIEW */}
+        {currentView === "history" && (
+          <div className="space-y-6">
+            {/* Cards de Estatísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div className="flex items-center gap-3 mb-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <h3 className="text-gray-400 font-medium">Concluídos</h3>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  {history.filter(h => h.status === "done").length}
+                </p>
+              </div>
+
+              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div className="flex items-center gap-3 mb-2">
+                  <XCircle className="w-5 h-5 text-orange-500" />
+                  <h3 className="text-gray-400 font-medium">Cancelados</h3>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  {history.filter(h => h.status === "cancelled").length}
+                </p>
+              </div>
+
+              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="w-5 h-5 text-amber-500" />
+                  <h3 className="text-gray-400 font-medium">Faturamento</h3>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  R$ {history
+                    .filter(h => h.status === "done")
+                    .reduce((acc, curr) => acc + (Number(curr.servicePrice) || 0), 0)
+                    .toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            {/* Lista de Histórico */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4">Histórico de Hoje</h2>
+              <div className="space-y-3">
+                {history.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Nenhum registro hoje.</p>
+                ) : (
+                  history.map((item) => (
+                    <div key={item.id} className="bg-gray-700/50 rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-white font-bold">{item.name}</h3>
+                        <div className="flex items-center gap-3 text-sm text-gray-400 mt-1">
+                          {item.serviceName && (
+                            <>
+                              <span>{item.serviceName}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          {item.servicePrice > 0 && (
+                            <>
+                              <span>R$ {item.servicePrice}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          <span>
+                            {new Date(item.completedAt || item.cancelledAt || item.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {item.type === "appointment" && (
+                            <>
+                              <span>•</span>
+                              <span className="text-blue-400">Agendamento</span>
+                            </>
+                          )}
+                        </div>
+                        {item.rating && (
+                          <div className="flex items-center gap-1 mt-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`w-4 h-4 ${star <= item.rating
+                                  ? "fill-amber-500 text-amber-500"
+                                  : "text-gray-600"
+                                  }`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${item.status === "done"
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-orange-500/20 text-orange-400"
+                          }`}>
+                          {item.status === "done" ? "Concluído" : "Cancelado"}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal de Serviços */}
       {showServiceModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold text-white">Gerenciar Serviços</h3>
@@ -508,6 +836,15 @@ export default function BarberView({ queue, onBack }) {
                     placeholder="Min"
                     className="flex-1 md:w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
+                  <input
+                    type="number"
+                    value={newService.price}
+                    onChange={(e) =>
+                      setNewService({ ...newService, price: e.target.value })
+                    }
+                    placeholder="R$"
+                    className="flex-1 md:w-24 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
                   <button
                     onClick={handleAddService}
                     className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg flex-shrink-0"
@@ -526,7 +863,7 @@ export default function BarberView({ queue, onBack }) {
                     <div>
                       <p className="text-white font-medium">{service.name}</p>
                       <p className="text-sm text-gray-400">
-                        {service.duration} min
+                        {service.duration} min • R$ {service.price}
                       </p>
                     </div>
                     <button
@@ -543,6 +880,92 @@ export default function BarberView({ queue, onBack }) {
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Agendamentos */}
+      {showAppointmentModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white">Novo Agendamento</h3>
+              <button
+                onClick={() => setShowAppointmentModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-300 mb-2">Nome do Cliente *</label>
+                <input
+                  type="text"
+                  value={newAppointment.name}
+                  onChange={(e) => setNewAppointment({ ...newAppointment, name: e.target.value })}
+                  placeholder="Nome completo"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-300 mb-2">Telefone</label>
+                <input
+                  type="tel"
+                  value={newAppointment.phone}
+                  onChange={(e) => setNewAppointment({ ...newAppointment, phone: e.target.value })}
+                  placeholder="(00) 00000-0000"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-300 mb-2">Data *</label>
+                  <input
+                    type="date"
+                    value={newAppointment.date}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, date: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-2">Horário *</label>
+                  <input
+                    type="time"
+                    value={newAppointment.time}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-300 mb-2">Serviço (opcional)</label>
+                <select
+                  value={newAppointment.serviceId}
+                  onChange={(e) => setNewAppointment({ ...newAppointment, serviceId: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">A definir</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name} ({service.duration} min - R$ {service.price})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={handleAddAppointment}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
+              >
+                Criar Agendamento
+              </button>
             </div>
           </div>
         </div>

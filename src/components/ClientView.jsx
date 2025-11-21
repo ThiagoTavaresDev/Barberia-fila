@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Scissors, Users, Clock, Bell, Instagram } from "lucide-react";
+import { Scissors, Users, Clock, Bell, Instagram, Star } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   getClientPosition,
@@ -8,12 +8,16 @@ import {
   requestNotificationPermission,
   sendNotification,
 } from "../utils/helpers";
+import { submitRating } from "../services/queueService";
 import tadaSound from "../sounds/ta-da.mp3";
 
 export default function ClientView({ queue, clientId, onBack }) {
   const [notificationPermission, setNotificationPermission] = useState(
     Notification.permission === "granted"
   );
+  const [rating, setRating] = useState(0);
+  const [hasRated, setHasRated] = useState(false);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Ref para controlar se o efeito já foi disparado para a posição 1
   const hasCelebratedRef = useRef(false);
@@ -110,7 +114,86 @@ export default function ClientView({ queue, clientId, onBack }) {
     }
   };
 
+  const handleRatingSubmit = async () => {
+    if (rating === 0) {
+      alert("Por favor, selecione uma avaliação antes de enviar.");
+      return;
+    }
+
+    setIsSubmittingRating(true);
+    try {
+      await submitRating(clientId, rating);
+      setHasRated(true);
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      alert("Erro ao enviar avaliação. Tente novamente.");
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
+  // Cliente não está na fila (removido ou finalizado)
   if (!clientId || position === 0) {
+    // Se o cliente ainda não avaliou, mostrar interface de avaliação
+    if (!hasRated && client && client.status === "done" && !client.rating) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
+            <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Scissors className="w-10 h-10 text-green-500" />
+            </div>
+
+            <h2 className="text-2xl font-bold text-white">
+              Atendimento Concluído!
+            </h2>
+
+            <p className="text-gray-300 text-lg">
+              Como foi sua experiência?
+            </p>
+
+            {/* Rating Stars */}
+            <div className="flex justify-center gap-2 py-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  className="transition-all duration-200 transform hover:scale-110"
+                >
+                  <Star
+                    className={`w-12 h-12 ${star <= rating
+                      ? "fill-amber-500 text-amber-500"
+                      : "text-gray-600 hover:text-amber-500"
+                      }`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleRatingSubmit}
+              disabled={isSubmittingRating || rating === 0}
+              className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg transition-all duration-200"
+            >
+              {isSubmittingRating ? "Enviando..." : "Enviar Avaliação"}
+            </button>
+
+            <div className="pt-4">
+              <a
+                href="https://www.instagram.com/diniz_barbershoper/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              >
+                <Instagram className="w-6 h-6" />
+                <span>Siga nosso Instagram</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Já avaliou ou não precisa avaliar
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
@@ -119,11 +202,14 @@ export default function ClientView({ queue, clientId, onBack }) {
           </div>
 
           <h2 className="text-2xl font-bold text-white">
-            Atendimento Finalizado
+            {hasRated ? "Obrigado pela avaliação!" : "Atendimento Finalizado"}
           </h2>
 
           <p className="text-gray-300 text-lg leading-relaxed">
-            Obrigado pela confiança no nosso serviço, até o próximo atendimento!
+            {hasRated
+              ? "Sua opinião é muito importante para nós!"
+              : "Obrigado pela confiança no nosso serviço, até o próximo atendimento!"
+            }
           </p>
 
           <div className="pt-4">
