@@ -806,19 +806,20 @@ export default function BarberView() {
       {/* Modal de Serviços */}
       {showServiceModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">Gerenciar Serviços</h3>
+          <div className="bg-gray-800 rounded-xl p-4 sm:p-6 max-w-md w-full space-y-4 sm:space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between sticky top-0 bg-gray-800 pb-2">
+              <h3 className="text-lg sm:text-xl font-bold text-white">Gerenciar Serviços</h3>
               <button
                 onClick={() => setShowServiceModal(false)}
                 className="text-gray-400 hover:text-white"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex flex-col md:flex-row gap-2">
+            <div className="space-y-3 sm:space-y-4">
+              {/* Formulário de Adicionar Serviço */}
+              <div className="space-y-2">
                 <input
                   type="text"
                   value={newService.name}
@@ -826,7 +827,7 @@ export default function BarberView() {
                     setNewService({ ...newService, name: e.target.value })
                   }
                   placeholder="Nome do serviço"
-                  className="w-full md:flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
                 />
                 <div className="flex gap-2">
                   <input
@@ -835,8 +836,8 @@ export default function BarberView() {
                     onChange={(e) =>
                       setNewService({ ...newService, duration: e.target.value })
                     }
-                    placeholder="Min"
-                    className="flex-1 md:w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Minutos"
+                    className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
                   />
                   <input
                     type="number"
@@ -844,40 +845,43 @@ export default function BarberView() {
                     onChange={(e) =>
                       setNewService({ ...newService, price: e.target.value })
                     }
-                    placeholder="R$"
-                    className="flex-1 md:w-24 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Preço (R$)"
+                    className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
                   />
                   <button
                     onClick={handleAddService}
                     className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg flex-shrink-0"
+                    title="Adicionar serviço"
                   >
-                    <Plus className="w-6 h-6" />
+                    <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 </div>
               </div>
 
+              {/* Lista de Serviços */}
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {services.map((service) => (
                   <div
                     key={service.id}
                     className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"
                   >
-                    <div>
-                      <p className="text-white font-medium">{service.name}</p>
-                      <p className="text-sm text-gray-400">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <p className="text-white font-medium text-sm sm:text-base truncate">{service.name}</p>
+                      <p className="text-xs sm:text-sm text-gray-400">
                         {service.duration} min • R$ {service.price}
                       </p>
                     </div>
                     <button
                       onClick={() => handleRemoveService(service.id)}
-                      className="text-red-400 hover:text-red-300"
+                      className="text-red-400 hover:text-red-300 flex-shrink-0"
+                      title="Remover serviço"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </div>
                 ))}
                 {services.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">
+                  <p className="text-center text-gray-500 py-4 text-sm">
                     Nenhum serviço cadastrado.
                   </p>
                 )}
