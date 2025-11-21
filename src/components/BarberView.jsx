@@ -340,36 +340,36 @@ export default function BarberView() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <button
               onClick={() => setCurrentView("queue")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${currentView === "queue"
+              className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "queue"
                 ? "bg-amber-600 text-white"
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                 }`}
             >
               <Users className="w-4 h-4" />
-              Fila ({queue.length})
+              <span>Fila ({queue.length})</span>
             </button>
             <button
               onClick={() => setCurrentView("appointments")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${currentView === "appointments"
+              className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "appointments"
                 ? "bg-amber-600 text-white"
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                 }`}
             >
               <Calendar className="w-4 h-4" />
-              Agendamentos ({appointments.length})
+              <span className="whitespace-nowrap">Agendamentos ({appointments.length})</span>
             </button>
             <button
               onClick={() => setCurrentView("history")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${currentView === "history"
+              className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "history"
                 ? "bg-amber-600 text-white"
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                 }`}
             >
               <History className="w-4 h-4" />
-              Histórico
+              <span>Histórico</span>
             </button>
           </div>
 
@@ -619,10 +619,10 @@ export default function BarberView() {
             <div className="flex justify-end">
               <button
                 onClick={() => setShowAppointmentModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
               >
                 <Plus className="w-5 h-5" />
-                Novo Agendamento
+                <span>Novo Agendamento</span>
               </button>
             </div>
 
@@ -639,27 +639,27 @@ export default function BarberView() {
                     const isToday = date.toDateString() === new Date().toDateString();
 
                     return (
-                      <div key={appointment.id} className="bg-gray-700/50 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
+                      <div key={appointment.id} className="bg-gray-700/50 rounded-lg p-3 sm:p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="flex-1">
-                            <h3 className="text-white font-bold">{appointment.name}</h3>
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400 mt-1">
+                            <h3 className="text-white font-bold text-base sm:text-lg">{appointment.name}</h3>
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-400 mt-1">
                               <div className="flex items-center gap-1">
-                                <CalendarClock className="w-4 h-4" />
-                                {dateStr} às {appointment.scheduledTime}
+                                <CalendarClock className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="whitespace-nowrap">{dateStr} às {appointment.scheduledTime}</span>
                               </div>
                               {appointment.serviceName && (
                                 <>
-                                  <span>•</span>
-                                  <span>{appointment.serviceName}</span>
+                                  <span className="hidden sm:inline">•</span>
+                                  <span className="truncate">{appointment.serviceName}</span>
                                 </>
                               )}
                               {appointment.phone && (
                                 <>
-                                  <span>•</span>
+                                  <span className="hidden sm:inline">•</span>
                                   <div className="flex items-center gap-1">
-                                    <Phone className="w-4 h-4" />
-                                    {appointment.phone}
+                                    <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                                    <span className="truncate">{appointment.phone}</span>
                                   </div>
                                 </>
                               )}
@@ -670,14 +670,14 @@ export default function BarberView() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
                             <button
                               onClick={() => handleMoveToQueue(appointment)}
-                              className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                              className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm"
                               title="Iniciar atendimento"
                             >
                               <PlayCircle className="w-4 h-4" />
-                              Iniciar
+                              <span>Iniciar</span>
                             </button>
                             <button
                               onClick={() => handleCancelAppointment(appointment.id, appointment.name)}
@@ -699,35 +699,35 @@ export default function BarberView() {
 
         {/* 📜 HISTORY VIEW */}
         {currentView === "history" && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Cards de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                <div className="flex items-center gap-3 mb-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <h3 className="text-gray-400 font-medium">Concluídos</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6 border border-gray-700">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
+                  <h3 className="text-gray-400 font-medium text-sm sm:text-base">Concluídos</h3>
                 </div>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-2xl sm:text-3xl font-bold text-white">
                   {history.filter(h => h.status === "done").length}
                 </p>
               </div>
 
-              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                <div className="flex items-center gap-3 mb-2">
-                  <XCircle className="w-5 h-5 text-orange-500" />
-                  <h3 className="text-gray-400 font-medium">Cancelados</h3>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6 border border-gray-700">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                  <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
+                  <h3 className="text-gray-400 font-medium text-sm sm:text-base">Cancelados</h3>
                 </div>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-2xl sm:text-3xl font-bold text-white">
                   {history.filter(h => h.status === "cancelled").length}
                 </p>
               </div>
 
-              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                <div className="flex items-center gap-3 mb-2">
-                  <DollarSign className="w-5 h-5 text-amber-500" />
-                  <h3 className="text-gray-400 font-medium">Faturamento</h3>
+              <div className="bg-gray-800 rounded-xl p-4 sm:p-6 border border-gray-700">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
+                  <h3 className="text-gray-400 font-medium text-sm sm:text-base">Faturamento</h3>
                 </div>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-2xl sm:text-3xl font-bold text-white">
                   R$ {history
                     .filter(h => h.status === "done")
                     .reduce((acc, curr) => acc + (Number(curr.servicePrice) || 0), 0)
@@ -737,60 +737,62 @@ export default function BarberView() {
             </div>
 
             {/* Lista de Histórico */}
-            <div className="bg-gray-800 rounded-xl p-6">
+            <div className="bg-gray-800 rounded-xl p-4 sm:p-6">
               <h2 className="text-xl font-bold text-white mb-4">Histórico de Hoje</h2>
               <div className="space-y-3">
                 {history.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">Nenhum registro hoje.</p>
                 ) : (
                   history.map((item) => (
-                    <div key={item.id} className="bg-gray-700/50 rounded-lg p-4 flex items-center justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-white font-bold">{item.name}</h3>
-                        <div className="flex items-center gap-3 text-sm text-gray-400 mt-1">
-                          {item.serviceName && (
-                            <>
-                              <span>{item.serviceName}</span>
-                              <span>•</span>
-                            </>
-                          )}
-                          {item.servicePrice > 0 && (
-                            <>
-                              <span>R$ {item.servicePrice}</span>
-                              <span>•</span>
-                            </>
-                          )}
-                          <span>
-                            {new Date(item.completedAt || item.cancelledAt || item.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          {item.type === "appointment" && (
-                            <>
-                              <span>•</span>
-                              <span className="text-blue-400">Agendamento</span>
-                            </>
+                    <div key={item.id} className="bg-gray-700/50 rounded-lg p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-bold text-base sm:text-lg">{item.name}</h3>
+                          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-gray-400 mt-1">
+                            {item.serviceName && (
+                              <>
+                                <span className="truncate">{item.serviceName}</span>
+                                <span className="hidden sm:inline">•</span>
+                              </>
+                            )}
+                            {item.servicePrice > 0 && (
+                              <>
+                                <span className="whitespace-nowrap">R$ {item.servicePrice}</span>
+                                <span className="hidden sm:inline">•</span>
+                              </>
+                            )}
+                            <span className="whitespace-nowrap">
+                              {new Date(item.completedAt || item.cancelledAt || item.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {item.type === "appointment" && (
+                              <>
+                                <span className="hidden sm:inline">•</span>
+                                <span className="text-blue-400 whitespace-nowrap">Agendamento</span>
+                              </>
+                            )}
+                          </div>
+                          {item.rating && (
+                            <div className="flex items-center gap-1 mt-2">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`w-3 h-3 sm:w-4 sm:h-4 ${star <= item.rating
+                                    ? "fill-amber-500 text-amber-500"
+                                    : "text-gray-600"
+                                    }`}
+                                />
+                              ))}
+                            </div>
                           )}
                         </div>
-                        {item.rating && (
-                          <div className="flex items-center gap-1 mt-2">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`w-4 h-4 ${star <= item.rating
-                                  ? "fill-amber-500 text-amber-500"
-                                  : "text-gray-600"
-                                  }`}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${item.status === "done"
-                          ? "bg-green-500/20 text-green-400"
-                          : "bg-orange-500/20 text-orange-400"
-                          }`}>
-                          {item.status === "done" ? "Concluído" : "Cancelado"}
-                        </span>
+                        <div className="flex items-center justify-end sm:justify-start">
+                          <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap ${item.status === "done"
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-orange-500/20 text-orange-400"
+                            }`}>
+                            {item.status === "done" ? "Concluído" : "Cancelado"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))
