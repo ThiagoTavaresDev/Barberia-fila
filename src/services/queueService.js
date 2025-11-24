@@ -119,6 +119,19 @@ export async function completeFirst(queue) {
   });
 }
 
+// Atualizar dados do cliente
+export async function updateClient(clientId, data) {
+  await updateDoc(doc(db, "queue", clientId), data);
+}
+
+// Desfazer conclusão (voltar para fila)
+export async function undoComplete(clientId) {
+  await updateDoc(doc(db, "queue", clientId), {
+    status: "waiting",
+    completedAt: null,
+  });
+}
+
 // Listener em tempo real da fila
 export function listenQueue(callback) {
   // Ordenar por 'order' e depois por 'joinedAt' como fallback

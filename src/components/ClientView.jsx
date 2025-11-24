@@ -269,11 +269,18 @@ export default function ClientView({ queue, clientId, onBack }) {
                 <Clock className="w-5 h-5 text-amber-500" />
                 <span className="text-gray-300">Tempo estimado</span>
               </div>
-              <span className="text-white font-bold">
-                {position === 1
-                  ? "É a sua vez!"
-                  : formatDuration(estimatedWaitMinutes)}
-              </span>
+              <div className="text-right">
+                <span className="text-white font-bold block">
+                  {position === 1
+                    ? "É a sua vez!"
+                    : formatDuration(estimatedWaitMinutes)}
+                </span>
+                {position > 1 && (
+                  <span className="text-xs text-gray-400">
+                    Previsão: {new Date(Date.now() + estimatedWaitMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

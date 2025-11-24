@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import BarberView from "./components/BarberView";
 import ClientView from "./components/ClientView";
+import CheckInView from "./components/CheckInView";
 import { listenQueue } from "./services/queueService";
 
 export default function App() {
   const [queue, setQueue] = useState([]);
   const [clientId, setClientId] = useState(null);
   const [isBarber, setIsBarber] = useState(false);
+  const [isCheckIn, setIsCheckIn] = useState(false);
 
   // Atualização em tempo real do Firestore
   useEffect(() => {
@@ -21,6 +23,8 @@ export default function App() {
 
     if (window.location.pathname.includes("/barber")) {
       setIsBarber(true);
+    } else if (window.location.pathname.includes("/checkin")) {
+      setIsCheckIn(true);
     } else if (clientParam) {
       setClientId(clientParam);
     }
@@ -29,6 +33,11 @@ export default function App() {
   // Painel do barbeiro
   if (isBarber) {
     return <BarberView queue={queue} />;
+  }
+
+  // Tela de Check-in (Auto-atendimento)
+  if (isCheckIn) {
+    return <CheckInView />;
   }
 
   // Tela do cliente

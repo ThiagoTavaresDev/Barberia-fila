@@ -20,8 +20,11 @@ import {
   Calendar,
   CalendarClock,
   XCircle,
-  PlayCircle
+
+  PlayCircle,
+  Coffee
 } from "lucide-react";
+import LiveTimer from "./LiveTimer";
 import {
   getWaitingTime,
   generateWhatsAppMessage,
@@ -44,8 +47,16 @@ import {
   moveAppointmentToQueue,
   cancelAppointment,
   cancelClient,
-  getFullHistory
+  getFullHistory,
+  updateClient,
+  undoComplete
 } from "../services/queueService";
+import {
+  setBarberStatus,
+  listenBarberStatus,
+  endBreak
+} from "../services/barberStatus";
+import { Edit2, Undo2, QrCode } from "lucide-react";
 
 export default function BarberView() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -57,6 +68,17 @@ export default function BarberView() {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [currentView, setCurrentView] = useState("queue"); // "queue", "appointments", "history"
   const [history, setHistory] = useState([]);
+
+  // Estados para Edição e Undo
+  const [editingClient, setEditingClient] = useState(null);
+  const [lastCompletedClient, setLastCompletedClient] = useState(null);
+  const [showUndo, setShowUndo] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [showBreakModal, setShowBreakModal] = useState(false);
+
+  // Estados para Status do Barbeiro
+  const [barberStatus, setBarberStatus] = useState({ status: 'available' });
+  const [breakTimeRemaining, setBreakTimeRemaining] = useState(null);
 
   const [newClient, setNewClient] = useState({
     name: "",
@@ -83,7 +105,16 @@ export default function BarberView() {
 
   useEffect(() => {
     console.log("Setting up listeners...");
-    const unsubscribeQueue = listenQueue(setQueue);
+    const unsubscribeQueue = listenQueue((newQueue) => {
+      setQueue(prevQueue => {
+        // Tocar som se a fila aumentou e não foi o primeiro carregamento
+        if (prevQueue.length > 0 && newQueue.length > prevQueue.length) {
+          const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+          audio.play().catch(e => console.log("Audio play failed:", e));
+        }
+        return newQueue;
+      });
+    });
     const unsubscribeServices = listenServices(setServices);
     const unsubscribeAppointments = listenAppointments((apps) => {
       console.log("Appointments updated:", apps);
@@ -95,6 +126,40 @@ export default function BarberView() {
       unsubscribeAppointments();
     };
   }, []);
+
+  // Listener para status do barbeiro
+  useEffect(() => {
+    const unsubscribe = listenBarberStatus((status) => {
+      setBarberStatus(status);
+
+      // Se estiver em pausa, calcular tempo restante
+      if (status.status === 'on_break' && status.breakEndsAt) {
+        const remaining = Math.max(0, status.breakEndsAt - Date.now());
+        setBreakTimeRemaining(remaining);
+      } else {
+        setBreakTimeRemaining(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Timer para atualizar tempo restante da pausa
+  useEffect(() => {
+    if (barberStatus.status === 'on_break' && barberStatus.breakEndsAt) {
+      const interval = setInterval(() => {
+        const remaining = Math.max(0, barberStatus.breakEndsAt - Date.now());
+        setBreakTimeRemaining(remaining);
+
+        // Se o tempo acabou, finalizar pausa automaticamente
+        if (remaining === 0) {
+          endBreak();
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [barberStatus]);
 
   const loadHistory = async () => {
     const fullHistory = await getFullHistory();
@@ -191,8 +256,48 @@ export default function BarberView() {
     }
 
     if (window.confirm(`Finalizar atendimento de ${queue[0].name}?`)) {
+      const clientToComplete = queue[0];
       await completeFirst(queue);
+
+      // Configurar Undo
+      setLastCompletedClient(clientToComplete);
+      setShowUndo(true);
+      setTimeout(() => setShowUndo(false), 10000); // 10 segundos para desfazer
     }
+  };
+
+  // ↩️ DESFAZER FINALIZAÇÃO
+  const handleUndo = async () => {
+    if (lastCompletedClient) {
+      await undoComplete(lastCompletedClient.id);
+      setShowUndo(false);
+      setLastCompletedClient(null);
+    }
+  };
+
+  // ✏️ EDITAR CLIENTE
+  const handleEditClient = (client) => {
+    setEditingClient({
+      ...client,
+      serviceId: services.find(s => s.name === client.serviceName)?.id || ""
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingClient.name.trim()) return;
+
+    const selectedService = services.find(s => s.id === editingClient.serviceId);
+
+    const updates = {
+      name: editingClient.name,
+      phone: editingClient.noPhone ? "" : editingClient.phone,
+      serviceName: selectedService ? selectedService.name : editingClient.serviceName,
+      serviceDuration: selectedService ? selectedService.duration : editingClient.serviceDuration,
+      servicePrice: selectedService ? selectedService.price : editingClient.servicePrice,
+    };
+
+    await updateClient(editingClient.id, updates);
+    setEditingClient(null);
   };
 
   // ⬆️⬇️ MOVER CLIENTE
@@ -323,6 +428,20 @@ export default function BarberView() {
               <h1 className="text-2xl font-bold text-white">Painel do Barbeiro</h1>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => setShowQrModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+              >
+                <QrCode className="w-4 h-4" />
+                Auto-Checkin
+              </button>
+              <button
+                onClick={() => setShowBreakModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+              >
+                <Coffee className="w-4 h-4" />
+                Pausa
+              </button>
               <button
                 onClick={() => setShowServiceModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
@@ -532,7 +651,7 @@ export default function BarberView() {
                         </div>
                         <div>
                           <h3 className="text-xl font-bold text-white">
-                            {client.name}
+                            {client.type === 'break' ? `☕ ${client.name}` : client.name}
                           </h3>
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400 mt-1">
                             <div className="flex items-center gap-1">
@@ -546,7 +665,7 @@ export default function BarberView() {
                             </div>
                             <div className="flex items-center gap-1">
                               <Clock className="w-4 h-4 text-gray-500" />
-                              Espere: {getWaitingTime(client.joinedAt)}
+                              Tempo aguardando para ser atendido: <LiveTimer joinedAt={client.joinedAt} />
                             </div>
                           </div>
                         </div>
@@ -579,6 +698,14 @@ export default function BarberView() {
                             </button>
                           </>
                         )}
+
+                        <button
+                          onClick={() => handleEditClient(client)}
+                          className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                          title="Editar cliente"
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
 
                         <button
                           onClick={() => handleResendMessage(client)}
@@ -800,181 +927,498 @@ export default function BarberView() {
               </div>
             </div>
           </div>
+
         )}
       </div>
 
       {/* Modal de Serviços */}
-      {showServiceModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-xl p-4 sm:p-6 max-w-md w-full space-y-4 sm:space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between sticky top-0 bg-gray-800 pb-2">
-              <h3 className="text-lg sm:text-xl font-bold text-white">Gerenciar Serviços</h3>
-              <button
-                onClick={() => setShowServiceModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-3 sm:space-y-4">
-              {/* Formulário de Adicionar Serviço */}
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={newService.name}
-                  onChange={(e) =>
-                    setNewService({ ...newService, name: e.target.value })
-                  }
-                  placeholder="Nome do serviço"
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
-                />
-                <input
-                  type="number"
-                  value={newService.duration}
-                  onChange={(e) =>
-                    setNewService({ ...newService, duration: e.target.value })
-                  }
-                  placeholder="Duração (minutos)"
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
-                />
-                <input
-                  type="number"
-                  value={newService.price}
-                  onChange={(e) =>
-                    setNewService({ ...newService, price: e.target.value })
-                  }
-                  placeholder="Preço (R$)"
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm sm:text-base"
-                />
+      {
+        showServiceModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Gerenciar Serviços</h3>
                 <button
-                  onClick={handleAddService}
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 font-medium"
-                  title="Adicionar serviço"
+                  onClick={() => setShowServiceModal(false)}
+                  className="text-gray-400 hover:text-white"
                 >
-                  <Plus className="w-5 h-5" />
-                  <span>Adicionar Serviço</span>
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
-              {/* Lista de Serviços */}
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {services.map((service) => (
-                  <div
-                    key={service.id}
-                    className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newService.name}
+                    onChange={(e) =>
+                      setNewService({ ...newService, name: e.target.value })
+                    }
+                    placeholder="Nome do serviço"
+                    className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <input
+                    type="number"
+                    value={newService.duration}
+                    onChange={(e) =>
+                      setNewService({ ...newService, duration: e.target.value })
+                    }
+                    placeholder="Min"
+                    className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <input
+                    type="number"
+                    value={newService.price}
+                    onChange={(e) =>
+                      setNewService({ ...newService, price: e.target.value })
+                    }
+                    placeholder="R$"
+                    className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <button
+                    onClick={handleAddService}
+                    className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg"
                   >
-                    <div className="flex-1 min-w-0 pr-2">
-                      <p className="text-white font-medium text-sm sm:text-base truncate">{service.name}</p>
-                      <p className="text-xs sm:text-sm text-gray-400">
-                        {service.duration} min • R$ {service.price}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveService(service.id)}
-                      className="text-red-400 hover:text-red-300 flex-shrink-0"
-                      title="Remover serviço"
+                    <Plus className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {services.map((service) => (
+                    <div
+                      key={service.id}
+                      className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"
                     >
-                      <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  </div>
-                ))}
-                {services.length === 0 && (
-                  <p className="text-center text-gray-500 py-4 text-sm">
-                    Nenhum serviço cadastrado.
-                  </p>
-                )}
+                      <div>
+                        <p className="text-white font-medium">{service.name}</p>
+                        <p className="text-sm text-gray-400">
+                          {service.duration} min • R$ {service.price}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveService(service.id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Modal de Agendamentos */}
-      {showAppointmentModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">Novo Agendamento</h3>
-              <button
-                onClick={() => setShowAppointmentModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-300 mb-2">Nome do Cliente *</label>
-                <input
-                  type="text"
-                  value={newAppointment.name}
-                  onChange={(e) => setNewAppointment({ ...newAppointment, name: e.target.value })}
-                  placeholder="Nome completo"
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-300 mb-2">Telefone</label>
-                <input
-                  type="tel"
-                  value={newAppointment.phone}
-                  onChange={(e) => setNewAppointment({ ...newAppointment, phone: e.target.value })}
-                  placeholder="(00) 00000-0000"
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-300 mb-2">Data *</label>
-                  <input
-                    type="date"
-                    value={newAppointment.date}
-                    onChange={(e) => setNewAppointment({ ...newAppointment, date: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-300 mb-2">Horário *</label>
-                  <input
-                    type="time"
-                    value={newAppointment.time}
-                    onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-300 mb-2">Serviço (opcional)</label>
-                <select
-                  value={newAppointment.serviceId}
-                  onChange={(e) => setNewAppointment({ ...newAppointment, serviceId: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+      {
+        showAppointmentModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Novo Agendamento</h3>
+                <button
+                  onClick={() => setShowAppointmentModal(false)}
+                  className="text-gray-400 hover:text-white"
                 >
-                  <option value="">A definir</option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} ({service.duration} min - R$ {service.price})
-                    </option>
-                  ))}
-                </select>
+                  <X className="w-6 h-6" />
+                </button>
               </div>
 
-              <button
-                onClick={handleAddAppointment}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
-              >
-                Criar Agendamento
-              </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 mb-2">Nome do Cliente *</label>
+                  <input
+                    type="text"
+                    value={newAppointment.name}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, name: e.target.value })}
+                    placeholder="Nome completo"
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Telefone</label>
+                  <input
+                    type="tel"
+                    value={newAppointment.phone}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, phone: e.target.value })}
+                    placeholder="(00) 00000-0000"
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 mb-2">Data *</label>
+                    <input
+                      type="date"
+                      value={newAppointment.date}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, date: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 mb-2">Horário *</label>
+                    <input
+                      type="time"
+                      value={newAppointment.time}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Serviço (opcional)</label>
+                  <select
+                    value={newAppointment.serviceId}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, serviceId: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">A definir</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} ({service.duration} min - R$ {service.price})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleAddAppointment}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
+                >
+                  Criar Agendamento
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
+
+      {/* Modal de Edição */}
+      {
+        editingClient && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Editar Cliente</h3>
+                <button
+                  onClick={() => setEditingClient(null)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 mb-2">Nome</label>
+                  <input
+                    type="text"
+                    value={editingClient.name}
+                    onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Telefone</label>
+                  <input
+                    type="tel"
+                    value={editingClient.phone}
+                    disabled={editingClient.noPhone}
+                    onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
+                    className={`w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 ${editingClient.noPhone ? 'opacity-50' : ''}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Serviço</label>
+                  <select
+                    value={editingClient.serviceId}
+                    onChange={(e) => setEditingClient({ ...editingClient, serviceId: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} ({service.duration} min)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleSaveEdit}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition-colors"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Botão Flutuante de Undo */}
+      {
+        showUndo && (
+          <div className="fixed bottom-6 right-6 z-50 animate-bounce">
+            <button
+              onClick={handleUndo}
+              className="bg-gray-800 border border-amber-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 hover:bg-gray-700 transition-colors"
+            >
+              <Undo2 className="w-5 h-5 text-amber-500" />
+              <span>Desfazer conclusão</span>
+            </button>
+          </div>
+        )
+      }
+
+
+      {/* Modal de Agendamentos */}
+      {
+        showAppointmentModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Novo Agendamento</h3>
+                <button
+                  onClick={() => setShowAppointmentModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 mb-2">Nome do Cliente *</label>
+                  <input
+                    type="text"
+                    value={newAppointment.name}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, name: e.target.value })}
+                    placeholder="Nome completo"
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Telefone</label>
+                  <input
+                    type="tel"
+                    value={newAppointment.phone}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, phone: e.target.value })}
+                    placeholder="(00) 00000-0000"
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 mb-2">Data *</label>
+                    <input
+                      type="date"
+                      value={newAppointment.date}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, date: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 mb-2">Horário *</label>
+                    <input
+                      type="time"
+                      value={newAppointment.time}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Serviço (opcional)</label>
+                  <select
+                    value={newAppointment.serviceId}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, serviceId: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">A definir</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} ({service.duration} min - R$ {service.price})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleAddAppointment}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
+                >
+                  Criar Agendamento
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de Edição */}
+      {
+        editingClient && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Editar Cliente</h3>
+                <button
+                  onClick={() => setEditingClient(null)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 mb-2">Nome</label>
+                  <input
+                    type="text"
+                    value={editingClient.name}
+                    onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Telefone</label>
+                  <input
+                    type="tel"
+                    value={editingClient.phone}
+                    disabled={editingClient.noPhone}
+                    onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
+                    className={`w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 ${editingClient.noPhone ? 'opacity-50' : ''}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Serviço</label>
+                  <select
+                    value={editingClient.serviceId}
+                    onChange={(e) => setEditingClient({ ...editingClient, serviceId: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} ({service.duration} min)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleSaveEdit}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition-colors"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Botão Flutuante de Undo */}
+      {
+        showUndo && (
+          <div className="fixed bottom-6 right-6 z-50 animate-bounce">
+            <button
+              onClick={handleUndo}
+              className="bg-gray-800 border border-amber-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 hover:bg-gray-700 transition-colors"
+            >
+              <Undo2 className="w-5 h-5 text-amber-500" />
+              <span>Desfazer conclusão</span>
+            </button>
+          </div>
+        )
+      }
+
+      {/* Modal de QR Code */}
+      {
+        showQrModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6 text-center">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Auto-Atendimento</h3>
+                <button
+                  onClick={() => setShowQrModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="bg-white p-4 rounded-lg inline-block">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.origin + "/checkin")}`}
+                  alt="QR Code Check-in"
+                />
+              </div>
+
+              <p className="text-gray-300">
+                Peça para o cliente escanear este código para entrar na fila sozinho.
+              </p>
+
+              <div className="bg-gray-700 p-3 rounded-lg break-all text-sm text-gray-400">
+                {window.location.origin}/checkin
+              </div>
+            </div>
+          </div>
+        )
+      }
+      {/* Modal de Pausa */}
+      {
+        showBreakModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Adicionar Pausa</h3>
+                <button
+                  onClick={() => setShowBreakModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[15, 30, 45, 60].map((min) => (
+                  <button
+                    key={min}
+                    onClick={async () => {
+                      const service = services.find(s => s.name.toLowerCase().includes('pausa')) || services[0];
+                      await addClient({
+                        name: "⏸️ PAUSA",
+                        phone: "",
+                        serviceName: `Pausa (${min} min)`,
+                        serviceDuration: min,
+                        servicePrice: 0
+                      });
+                      setShowBreakModal(false);
+                    }}
+                    className="bg-gray-700 hover:bg-amber-600 hover:text-white text-gray-300 py-4 rounded-lg transition-colors flex flex-col items-center gap-2"
+                  >
+                    <Clock className="w-6 h-6" />
+                    <span className="font-bold">{min} min</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      }
     </div>
   );
 }
