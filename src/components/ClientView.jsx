@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Scissors, Users, Clock, Bell, Instagram, Star } from "lucide-react";
+import { Scissors, Users, Clock, Bell, Instagram, Star, Coffee } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   getClientPosition,
@@ -9,6 +9,7 @@ import {
   sendNotification,
 } from "../utils/helpers";
 import { submitRating } from "../services/queueService";
+import { listenBarberStatus } from "../services/barberStatus";
 import tadaSound from "../sounds/ta-da.mp3";
 
 export default function ClientView({ queue, clientId, onBack }) {
@@ -26,8 +27,22 @@ export default function ClientView({ queue, clientId, onBack }) {
   const client = queue.find((c) => c.id === clientId);
   const clientIndex = queue.findIndex((c) => c.id === clientId);
 
+  // Estado do status do barbeiro
+  const [barberStatus, setBarberStatus] = useState({ status: 'available' });
+
+  useEffect(() => {
+    const unsubscribe = listenBarberStatus(setBarberStatus);
+    return () => unsubscribe();
+  }, []);
+
   // Calcular tempo estimado de espera (soma dos serviços anteriores)
-  const estimatedWaitMinutes = calculateEstimatedWait(queue, clientIndex);
+  let estimatedWaitMinutes = calculateEstimatedWait(queue, clientIndex);
+
+  // Se o barbeiro estiver em pausa determinada, adicionar o tempo restante
+  if (barberStatus.status === 'on_break' && barberStatus.breakEndsAt) {
+    const remainingBreak = Math.max(0, Math.ceil((barberStatus.breakEndsAt - Date.now()) / 60000));
+    estimatedWaitMinutes += remainingBreak;
+  }
 
   // Solicitar permissão de notificação ao carregar
   useEffect(() => {
@@ -38,7 +53,7 @@ export default function ClientView({ queue, clientId, onBack }) {
 
   // Efeitos quando chega a vez (Posição 1)
   useEffect(() => {
-    if (position === 1) {
+    if (position === 1 && barberStatus.status !== 'on_break') {
       // Notificação
       if (notificationPermission) {
         sendNotification(
@@ -89,7 +104,7 @@ export default function ClientView({ queue, clientId, onBack }) {
       // Resetar flag se sair da posição 1
       hasCelebratedRef.current = false;
     }
-  }, [position, notificationPermission]);
+  }, [position, notificationPermission, barberStatus.status]);
 
   const handleEnableNotifications = async () => {
     try {
@@ -228,6 +243,31 @@ export default function ClientView({ queue, clientId, onBack }) {
     );
   }
 
+  // Se o barbeiro estiver em pausa indeterminada, mostrar overlay
+  if (barberStatus.status === 'on_break' && !barberStatus.breakEndsAt) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
+          <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <Clock className="w-10 h-10 text-amber-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-white">
+            Pausa no Atendimento
+          </h2>
+          <p className="text-gray-300 text-lg leading-relaxed">
+            O barbeiro precisou fazer uma breve pausa. <br />
+            Voltaremos ao atendimento normal em instantes.
+          </p>
+          <div className="bg-gray-700/50 p-4 rounded-lg">
+            <p className="text-sm text-gray-400">
+              Sua posição na fila está garantida: <span className="text-white font-bold">{position}º</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-6">
@@ -271,7 +311,7 @@ export default function ClientView({ queue, clientId, onBack }) {
               </div>
               <div className="text-right">
                 <span className="text-white font-bold block">
-                  {position === 1
+                  {position === 1 && barberStatus.status !== 'on_break'
                     ? "É a sua vez!"
                     : formatDuration(estimatedWaitMinutes)}
                 </span>
@@ -282,6 +322,14 @@ export default function ClientView({ queue, clientId, onBack }) {
                 )}
               </div>
             </div>
+
+            {barberStatus.status === 'on_break' && barberStatus.breakEndsAt && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
+                <p className="text-amber-200 text-sm">
+                  ⚠️ O barbeiro está em uma pausa programada. O tempo estimado já inclui essa pausa.
+                </p>
+              </div>
+            )}
           </div>
 
           {!notificationPermission && (

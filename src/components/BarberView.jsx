@@ -77,7 +77,7 @@ export default function BarberView() {
   const [showBreakModal, setShowBreakModal] = useState(false);
 
   // Estados para Status do Barbeiro
-  const [barberStatus, setBarberStatus] = useState({ status: 'available' });
+  const [barberStatus, setLocalBarberStatus] = useState({ status: 'available' });
   const [breakTimeRemaining, setBreakTimeRemaining] = useState(null);
 
   const [newClient, setNewClient] = useState({
@@ -130,7 +130,7 @@ export default function BarberView() {
   // Listener para status do barbeiro
   useEffect(() => {
     const unsubscribe = listenBarberStatus((status) => {
-      setBarberStatus(status);
+      setLocalBarberStatus(status);
 
       // Se estiver em pausa, calcular tempo restante
       if (status.status === 'on_break' && status.breakEndsAt) {
@@ -422,36 +422,36 @@ export default function BarberView() {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="bg-gray-800 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
               <Scissors className="w-8 h-8 text-amber-500" />
               <h1 className="text-2xl font-bold text-white">Painel do Barbeiro</h1>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-center md:justify-end gap-2 w-full md:w-auto">
               <button
                 onClick={() => setShowQrModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap"
               >
                 <QrCode className="w-4 h-4" />
                 Auto-Checkin
               </button>
               <button
                 onClick={() => setShowBreakModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap"
               >
                 <Coffee className="w-4 h-4" />
                 Pausa
               </button>
               <button
                 onClick={() => setShowServiceModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap"
               >
                 <Settings className="w-4 h-4" />
                 Serviços
               </button>
               <button
                 onClick={() => setIsAuthenticated(false)}
-                className="text-gray-400 hover:text-white transition-colors px-4 py-2"
+                className="flex items-center justify-center gap-2 px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap"
               >
                 Sair
               </button>
@@ -947,7 +947,7 @@ export default function BarberView() {
               </div>
 
               <div className="space-y-4">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <input
                     type="text"
                     value={newService.name}
@@ -955,32 +955,34 @@ export default function BarberView() {
                       setNewService({ ...newService, name: e.target.value })
                     }
                     placeholder="Nome do serviço"
-                    className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="flex-1 min-w-[150px] px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
-                  <input
-                    type="number"
-                    value={newService.duration}
-                    onChange={(e) =>
-                      setNewService({ ...newService, duration: e.target.value })
-                    }
-                    placeholder="Min"
-                    className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  <input
-                    type="number"
-                    value={newService.price}
-                    onChange={(e) =>
-                      setNewService({ ...newService, price: e.target.value })
-                    }
-                    placeholder="R$"
-                    className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  <button
-                    onClick={handleAddService}
-                    className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg"
-                  >
-                    <Plus className="w-6 h-6" />
-                  </button>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={newService.duration}
+                      onChange={(e) =>
+                        setNewService({ ...newService, duration: e.target.value })
+                      }
+                      placeholder="Min"
+                      className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <input
+                      type="number"
+                      value={newService.price}
+                      onChange={(e) =>
+                        setNewService({ ...newService, price: e.target.value })
+                      }
+                      placeholder="R$"
+                      className="w-20 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      onClick={handleAddService}
+                      className="bg-amber-600 hover:bg-amber-700 text-white p-2 rounded-lg flex-shrink-0"
+                    >
+                      <Plus className="w-6 h-6" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -1384,7 +1386,7 @@ export default function BarberView() {
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">Adicionar Pausa</h3>
+                <h3 className="text-xl font-bold text-white">Gerenciar Pausa</h3>
                 <button
                   onClick={() => setShowBreakModal(false)}
                   className="text-gray-400 hover:text-white"
@@ -1393,28 +1395,73 @@ export default function BarberView() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {[15, 30, 45, 60].map((min) => (
+              {barberStatus.status === 'on_break' ? (
+                <div className="space-y-4">
+                  <div className="text-center p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                    <Coffee className="w-12 h-12 text-amber-500 mx-auto mb-2" />
+                    <h4 className="text-lg font-bold text-white mb-1">Em Pausa</h4>
+                    {barberStatus.breakEndsAt ? (
+                      <p className="text-amber-200">
+                        Retorno previsto em: {Math.ceil(breakTimeRemaining / 60000)} min
+                      </p>
+                    ) : (
+                      <p className="text-amber-200">Tempo Indeterminado</p>
+                    )}
+                  </div>
                   <button
-                    key={min}
-                    onClick={async () => {
-                      const service = services.find(s => s.name.toLowerCase().includes('pausa')) || services[0];
-                      await addClient({
-                        name: "⏸️ PAUSA",
-                        phone: "",
-                        serviceName: `Pausa (${min} min)`,
-                        serviceDuration: min,
-                        servicePrice: 0
-                      });
+                    onClick={() => {
+                      endBreak();
                       setShowBreakModal(false);
                     }}
-                    className="bg-gray-700 hover:bg-amber-600 hover:text-white text-gray-300 py-4 rounded-lg transition-colors flex flex-col items-center gap-2"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors"
                   >
-                    <Clock className="w-6 h-6" />
-                    <span className="font-bold">{min} min</span>
+                    Voltar ao Trabalho
                   </button>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-gray-300 text-sm">
+                    Selecione o tipo de pausa que deseja realizar. Isso ficará visível para os clientes.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <button
+                      onClick={() => {
+                        setBarberStatus('on_break', null); // Indeterminado
+                        setShowBreakModal(false);
+                      }}
+                      className="bg-gray-700 hover:bg-amber-600 hover:text-white text-gray-300 p-4 rounded-lg transition-colors flex items-center gap-3 text-left group"
+                    >
+                      <div className="bg-gray-600 group-hover:bg-amber-500 p-2 rounded-lg transition-colors">
+                        <Coffee className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="font-bold block">Tempo Indeterminado</span>
+                        <span className="text-xs opacity-70">Exibe mensagem de pausa para os clientes</span>
+                      </div>
+                    </button>
+
+                    <div className="space-y-2">
+                      <p className="text-gray-400 text-xs uppercase font-bold ml-1">Tempo Determinado</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[15, 30, 45, 60].map((min) => (
+                          <button
+                            key={min}
+                            onClick={() => {
+                              setBarberStatus('on_break', min);
+                              setShowBreakModal(false);
+                            }}
+                            className="bg-gray-700 hover:bg-amber-600 hover:text-white text-gray-300 py-3 rounded-lg transition-colors flex flex-col items-center gap-1"
+                          >
+                            <Clock className="w-5 h-5" />
+                            <span className="font-bold">{min} min</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )

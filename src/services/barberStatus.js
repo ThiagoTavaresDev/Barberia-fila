@@ -8,7 +8,7 @@ import {
 
 import { db } from "../firebase";
 
-const barberStatusDoc = doc(db, "settings", "barberStatus");
+const barberStatusDoc = doc(db, "queue", "barber_status_config");
 
 /**
  * Define o status do barbeiro
@@ -21,10 +21,18 @@ export async function setBarberStatus(status, duration = null) {
         updatedAt: Date.now(),
     };
 
-    if (status === "on_break" && duration) {
-        data.breakStartedAt = Date.now();
-        data.breakDuration = duration;
-        data.breakEndsAt = Date.now() + duration * 60 * 1000;
+    if (status === "on_break") {
+        if (duration) {
+            // Pausa determinada
+            data.breakStartedAt = Date.now();
+            data.breakDuration = duration;
+            data.breakEndsAt = Date.now() + duration * 60 * 1000;
+        } else {
+            // Pausa indeterminada
+            data.breakStartedAt = Date.now(); // Marca quando começou
+            data.breakDuration = null;
+            data.breakEndsAt = null;
+        }
     } else if (status === "available") {
         data.breakStartedAt = null;
         data.breakDuration = null;
