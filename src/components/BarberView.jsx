@@ -57,6 +57,7 @@ import {
   endBreak
 } from "../services/barberStatus";
 import { Edit2, Undo2, QrCode } from "lucide-react";
+import DashboardView from "./DashboardView";
 
 export default function BarberView() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -489,6 +490,16 @@ export default function BarberView() {
             >
               <History className="w-4 h-4" />
               <span>Histórico</span>
+            </button>
+            <button
+              onClick={() => setCurrentView("dashboard")}
+              className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "dashboard"
+                ? "bg-amber-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Financeiro</span>
             </button>
           </div>
 
@@ -927,7 +938,11 @@ export default function BarberView() {
               </div>
             </div>
           </div>
+        )}
 
+        {/* 📊 DASHBOARD VIEW */}
+        {currentView === "dashboard" && (
+          <DashboardView />
         )}
       </div>
 
@@ -937,7 +952,6 @@ export default function BarberView() {
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">Gerenciar Serviços</h3>
                 <button
                   onClick={() => setShowServiceModal(false)}
                   className="text-gray-400 hover:text-white"
@@ -1466,6 +1480,7 @@ export default function BarberView() {
           </div>
         )
       }
-    </div>
+    </div >
   );
 }
+

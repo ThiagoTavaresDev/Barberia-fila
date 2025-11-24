@@ -345,3 +345,86 @@ export async function getFullHistory() {
 
   return history;
 }
+
+// 📊 ESTATÍSTICAS DO DASHBOARD
+export async function getDashboardStats() {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(startOfWeek.getDate() - 7);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  try {
+    // Buscar atendimentos finalizados nos últimos 30 dias
+    // Nota: Em produção, idealmente usaria um índice composto (status + completedAt)
+    // Aqui vamos buscar todos os 'done' e filtrar na memória para simplificar sem índices complexos
+    const q = query(queueCollection, where("status", "==", "done"));
+    const snapshot = await getDocs(q);
+
+    const stats = {
+      today: { revenue: 0, clients: 0 },
+      week: { revenue: 0, clients: 0 },
+      month: { revenue: 0, clients: 0 },
+      services: {}, // { "Corte": { count: 10, revenue: 500 } }
+      dailyRevenue: {}, // { "2023-10-25": 150 }
+    };
+
+    // Inicializar últimos 7 dias com 0
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('pt-BR');
+      stats.dailyRevenue[dateStr] = 0;
+    }
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const completedAt = data.completedAt || data.joinedAt;
+      const price = parseFloat(data.servicePrice) || 0;
+      const serviceName = data.serviceName || "Outros";
+
+      // Ignorar se for muito antigo (mais de 30 dias)
+      if (completedAt < thirtyDaysAgo.getTime()) return;
+
+      // Stats Mensais (30 dias)
+      stats.month.revenue += price;
+      stats.month.clients += 1;
+
+      // Stats Semanais (7 dias)
+      if (completedAt >= startOfWeek.getTime()) {
+        stats.week.revenue += price;
+        stats.week.clients += 1;
+
+        // Gráfico Diário
+        const dateStr = new Date(completedAt).toLocaleDateString('pt-BR');
+        if (stats.dailyRevenue[dateStr] !== undefined) {
+          stats.dailyRevenue[dateStr] += price;
+        }
+      }
+
+      // Stats Diários (Hoje)
+      if (completedAt >= startOfDay.getTime()) {
+        stats.today.revenue += price;
+        stats.today.clients += 1;
+      }
+
+      // Top Serviços (Considerando os 30 dias)
+      if (!stats.services[serviceName]) {
+        stats.services[serviceName] = { count: 0, revenue: 0 };
+      }
+      stats.services[serviceName].count += 1;
+      stats.services[serviceName].revenue += price;
+    });
+
+    return stats;
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    return null;
+  }
+}
