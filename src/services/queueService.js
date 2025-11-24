@@ -68,6 +68,8 @@ export async function addClient(clientData) {
     serviceName: clientData.serviceName,
     serviceDuration: parseInt(clientData.serviceDuration),
     servicePrice: parseFloat(clientData.servicePrice) || 0,
+    notes: clientData.notes || "",
+    photoUrl: clientData.photoUrl || "",
     joinedAt,
     order,
     status: "waiting",

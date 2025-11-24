@@ -22,9 +22,11 @@ import {
   XCircle,
 
   PlayCircle,
-  Coffee
+  Coffee,
+  Camera
 } from "lucide-react";
 import LiveTimer from "./LiveTimer";
+import { compressImage } from "../utils/imageUtils";
 import {
   getWaitingTime,
   generateWhatsAppMessage,
@@ -81,11 +83,15 @@ export default function BarberView() {
   const [barberStatus, setLocalBarberStatus] = useState({ status: 'available' });
   const [breakTimeRemaining, setBreakTimeRemaining] = useState(null);
 
+  // Estado para visualizador de fotos
+  const [viewingPhoto, setViewingPhoto] = useState(null);
+
   const [newClient, setNewClient] = useState({
     name: "",
     phone: "",
     noPhone: false,
     serviceId: "",
+    notes: "",
   });
 
   const [newService, setNewService] = useState({
@@ -207,6 +213,7 @@ export default function BarberView() {
       serviceName: selectedService.name,
       serviceDuration: selectedService.duration,
       servicePrice: selectedService.price,
+      notes: newClient.notes,
     };
 
     // Adicionar no Firestore
@@ -226,7 +233,7 @@ export default function BarberView() {
       window.open(whatsappLink, "_blank");
     }
 
-    setNewClient({ ...newClient, name: "", phone: "", noPhone: false });
+    setNewClient({ ...newClient, name: "", phone: "", noPhone: false, notes: "" });
   };
 
   // ⚙️ GERENCIAR SERVIÇOS
@@ -295,6 +302,8 @@ export default function BarberView() {
       serviceName: selectedService ? selectedService.name : editingClient.serviceName,
       serviceDuration: selectedService ? selectedService.duration : editingClient.serviceDuration,
       servicePrice: selectedService ? selectedService.price : editingClient.servicePrice,
+      notes: editingClient.notes || "",
+      photoUrl: editingClient.photoUrl || "",
     };
 
     await updateClient(editingClient.id, updates);
@@ -313,6 +322,34 @@ export default function BarberView() {
     const message = generateStatusMessage(client, position, clientLink);
     const whatsappLink = generateWhatsAppLink(client.phone, message);
     window.open(whatsappLink, "_blank");
+  };
+
+  // 📷 UPLOAD DE FOTO
+  const handlePhotoUpload = async (clientId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment'; // Prefer camera on mobile
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        // Compress image to base64
+        const base64 = await compressImage(file);
+
+        // Update client with photo
+        await updateClient(clientId, { photoUrl: base64 });
+
+        alert('Foto salva com sucesso!');
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        alert('Erro ao salvar foto. Tente novamente.');
+      }
+    };
+
+    input.click();
   };
 
   // 📅 GERENCIAR AGENDAMENTOS
@@ -612,6 +649,24 @@ export default function BarberView() {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-gray-300 mb-2">
+                    Observações / Preferências
+                  </label>
+                  <textarea
+                    value={newClient.notes}
+                    onChange={(e) =>
+                      setNewClient({ ...newClient, notes: e.target.value })
+                    }
+                    placeholder="Ex: Usa máquina 2 nas laterais, não gosta de gel..."
+                    rows={3}
+                    className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    💡 Anote preferências do cliente para lembrar no próximo corte
+                  </p>
+                </div>
+
                 <button
                   onClick={handleAddClient}
                   disabled={services.length === 0}
@@ -679,6 +734,14 @@ export default function BarberView() {
                               Tempo aguardando para ser atendido: <LiveTimer joinedAt={client.joinedAt} />
                             </div>
                           </div>
+                          {client.notes && (
+                            <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                              <p className="text-sm text-blue-200 flex items-start gap-2">
+                                <span className="text-blue-400 font-bold">📝</span>
+                                <span className="flex-1">{client.notes}</span>
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -718,13 +781,35 @@ export default function BarberView() {
                           <Edit2 className="w-5 h-5" />
                         </button>
 
-                        <button
-                          onClick={() => handleResendMessage(client)}
-                          className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-colors"
-                          title="Reenviar mensagem"
-                        >
-                          <MessageCircle className="w-5 h-5" />
-                        </button>
+                        {/* Photo Upload/View Button */}
+                        {client.photoUrl ? (
+                          <button
+                            onClick={() => setViewingPhoto(client.photoUrl)}
+                            className="p-2 text-green-400 hover:text-green-300 hover:bg-green-400/10 rounded-lg transition-colors relative"
+                            title="Ver foto do corte"
+                          >
+                            <Camera className="w-5 h-5" />
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handlePhotoUpload(client.id)}
+                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                            title="Adicionar foto do corte"
+                          >
+                            <Camera className="w-5 h-5" />
+                          </button>
+                        )}
+
+                        {client.phone && (
+                          <button
+                            onClick={() => handleResendMessage(client)}
+                            className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-lg transition-colors"
+                            title="Reenviar mensagem"
+                          >
+                            <MessageCircle className="w-5 h-5" />
+                          </button>
+                        )}
 
                         <button
                           onClick={() => handleCancelClient(client.id, client.name)}
@@ -1166,6 +1251,89 @@ export default function BarberView() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-gray-300 mb-2">Observações / Preferências</label>
+                  <textarea
+                    value={editingClient.notes || ""}
+                    onChange={(e) => setEditingClient({ ...editingClient, notes: e.target.value })}
+                    placeholder="Ex: Usa máquina 2 nas laterais, não gosta de gel..."
+                    rows={3}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">Foto do Corte</label>
+                  {editingClient.photoUrl ? (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <img
+                          src={editingClient.photoUrl}
+                          alt="Foto atual"
+                          className="w-full h-40 object-cover rounded-lg cursor-pointer"
+                          onClick={() => setViewingPhoto(editingClient.photoUrl)}
+                        />
+                        <button
+                          onClick={() => setEditingClient({ ...editingClient, photoUrl: "" })}
+                          className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                          title="Remover foto"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.capture = 'environment';
+                          input.onchange = async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            try {
+                              const base64 = await compressImage(file);
+                              setEditingClient({ ...editingClient, photoUrl: base64 });
+                            } catch (error) {
+                              console.error('Error uploading photo:', error);
+                              alert('Erro ao salvar foto. Tente novamente.');
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                      >
+                        <Camera className="w-4 h-4" />
+                        Substituir Foto
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.capture = 'environment';
+                        input.onchange = async (e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          try {
+                            const base64 = await compressImage(file);
+                            setEditingClient({ ...editingClient, photoUrl: base64 });
+                          } catch (error) {
+                            console.error('Error uploading photo:', error);
+                            alert('Erro ao salvar foto. Tente novamente.');
+                          }
+                        };
+                        input.click();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Adicionar Foto
+                    </button>
+                  )}
+                </div>
+
                 <button
                   onClick={handleSaveEdit}
                   className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition-colors"
@@ -1282,69 +1450,6 @@ export default function BarberView() {
         )
       }
 
-      {/* Modal de Edição */}
-      {
-        editingClient && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">Editar Cliente</h3>
-                <button
-                  onClick={() => setEditingClient(null)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-300 mb-2">Nome</label>
-                  <input
-                    type="text"
-                    value={editingClient.name}
-                    onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-300 mb-2">Telefone</label>
-                  <input
-                    type="tel"
-                    value={editingClient.phone}
-                    disabled={editingClient.noPhone}
-                    onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
-                    className={`w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 ${editingClient.noPhone ? 'opacity-50' : ''}`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-300 mb-2">Serviço</label>
-                  <select
-                    value={editingClient.serviceId}
-                    onChange={(e) => setEditingClient({ ...editingClient, serviceId: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    {services.map((service) => (
-                      <option key={service.id} value={service.id}>
-                        {service.name} ({service.duration} min)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  onClick={handleSaveEdit}
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition-colors"
-                >
-                  Salvar Alterações
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
 
       {/* Botão Flutuante de Undo */}
       {
@@ -1480,6 +1585,29 @@ export default function BarberView() {
           </div>
         )
       }
+
+      {/* Photo Viewer Modal */}
+      {viewingPhoto && (
+        <div
+          className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50"
+          onClick={() => setViewingPhoto(null)}
+        >
+          <div className="relative max-w-4xl w-full">
+            <button
+              onClick={() => setViewingPhoto(null)}
+              className="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img
+              src={viewingPhoto}
+              alt="Foto do corte"
+              className="w-full h-auto rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div >
   );
 }
