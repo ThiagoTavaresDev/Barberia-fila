@@ -23,7 +23,8 @@ import {
 
   PlayCircle,
   Coffee,
-  Camera
+  Camera,
+  Printer
 } from "lucide-react";
 import LiveTimer from "./LiveTimer";
 import { compressImage } from "../utils/imageUtils";
@@ -350,6 +351,54 @@ export default function BarberView() {
     };
 
     input.click();
+  };
+
+  // 🖨️ IMPRIMIR QR CODE
+  const handlePrintQr = () => {
+    const printWindow = window.open('', '', 'width=600,height=600');
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(window.location.origin + "/checkin")}`;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>QR Code - Auto Check-in</title>
+          <style>
+            body {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              font-family: sans-serif;
+            }
+            img {
+              max-width: 80%;
+              height: auto;
+            }
+            h1 {
+              margin-bottom: 20px;
+              color: #333;
+            }
+            p {
+              margin-top: 10px;
+              color: #666;
+              font-size: 1.2rem;
+            }
+            @media print {
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Auto Check-in</h1>
+          <img src="${qrUrl}" onload="window.print();window.close()" />
+          <p>Escaneie para entrar na fila</p>
+          <p>${window.location.origin}/checkin</p>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   // 📅 GERENCIAR AGENDAMENTOS
@@ -1495,6 +1544,14 @@ export default function BarberView() {
               <div className="bg-gray-700 p-3 rounded-lg break-all text-sm text-gray-400">
                 {window.location.origin}/checkin
               </div>
+
+              <button
+                onClick={handlePrintQr}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Printer className="w-5 h-5" />
+                Imprimir QR Code
+              </button>
             </div>
           </div>
         )
