@@ -10,6 +10,9 @@ import {
   getDocs,
   limit,
   where,
+  setDoc,
+  getDoc,
+  increment,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -86,6 +89,14 @@ export async function addClient(userId, clientData) {
     status: "waiting",
   });
 
+  // Sync profile name immediately (Name Sync Fix)
+  if (clientData.phone) {
+    updateClientProfile(userId, clientData.phone, {
+      name: clientData.name,
+      // We don't update stats here, just identification
+    });
+  }
+
   return { id: docRef.id };
 }
 
@@ -124,15 +135,222 @@ export async function completeFirst(userId, queueList, paymentMethod = 'money') 
   if (queueList.length === 0) return;
 
   const first = queueList[0];
+  const now = Date.now();
 
+  // 1. Update Queue Item
   await updateDoc(doc(db, "users", userId, "queue", first.id), {
     status: "done",
-    completedAt: Date.now(),
-    paymentMethod, // Salvar método de pagamento
+    completedAt: now,
+    paymentMethod,
+  });
+
+  // 2. Update Client Profile (CRM)
+  if (first.phone) {
+    const updates = {
+      name: first.name,
+      lastVisit: now,
+      lastService: first.serviceName,
+      totalVisits: increment(1)
+    };
+
+    await updateClientProfile(userId, first.phone, updates);
+  }
+} // Close completeFirst properly
+
+// 📇 CRM & PERFIL DO CLIENTE
+
+// Helper to sanitize phone
+const sanitizePhone = (phone) => phone.replace(/\D/g, "");
+
+// Atualizar/Criar Perfil do Cliente (Persistente)
+export async function updateClientProfile(userId, phone, data) {
+  if (!userId || !phone) return;
+  try {
+    const cleanPhone = sanitizePhone(phone);
+    const clientRef = doc(db, "users", userId, "clients", cleanPhone);
+
+    // STRATEGY: Try atomic update first (Best for existing docs)
+    try {
+      await updateDoc(clientRef, {
+        ...data,
+        phone,
+        updatedAt: Date.now()
+      });
+    } catch (error) {
+      if (error.code === 'not-found') {
+        // Fallback: Document doesn't exist, create it.
+        // We need to convert any dot-notation keys back to nested objects for creation
+        const createData = {};
+        Object.keys(data).forEach(key => {
+          if (key.includes('.')) {
+            const [parent, child] = key.split('.');
+            if (!createData[parent]) createData[parent] = {};
+            createData[parent][child] = data[key];
+          } else {
+            createData[key] = data[key];
+          }
+        });
+
+        await setDoc(clientRef, {
+          phone,
+          ...createData,
+          totalVisits: typeof data.totalVisits === 'object' ? 1 : data.totalVisits, // Handle increment on create
+          totalSpent: typeof data.totalSpent === 'object' ? (data.totalSpent.operand || 0) : data.totalSpent, // Handle increment value (hacky but safer to just set initial)
+          // Actually, for creation, we can't use increment() efficiently on client-side SDK sometimes in the same set? 
+          // No, increment works in setDoc. But let's be safe.
+          // Wait, data.totalSpent IS an increment object. 
+          // For creation, we should just set the initial value.
+          // However, let's stick to using the passed data for now, but ensure nested structure.
+          ...createData,
+          updatedAt: Date.now()
+        });
+      } else {
+        throw error;
+      }
+    }
+
+  } catch (e) {
+    console.error("Error updating client profile", e);
+  }
+}
+
+// Obter perfil do cliente
+export async function getClientProfile(userId, phone) {
+  if (!userId || !phone) return null;
+  try {
+    const cleanPhone = sanitizePhone(phone);
+    const clientRef = doc(db, "users", userId, "clients", cleanPhone);
+    const docSnap = await getDoc(clientRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting client profile", error);
+    return null;
+  }
+}
+
+// Obter clientes inativos (para recuperação)
+export async function getInactiveClients(userId, days = 20) {
+  if (!userId) return [];
+
+  // 1. Pegar todos os clientes da collection 'clients'
+  // Se a collection estiver vazia, tentamos popular com dados recentes da fila (self-healing)
+  const clientsRef = collection(db, "users", userId, "clients");
+  const q = query(clientsRef, orderBy("lastVisit", "asc"));
+  const snapshot = await getDocs(q);
+
+  const now = Date.now();
+  const cutoffTime = now - (days * 24 * 60 * 60 * 1000);
+
+  const inactiveList = [];
+
+  if (!snapshot.empty) {
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.lastVisit && data.lastVisit < cutoffTime) {
+        const daysSince = Math.floor((now - data.lastVisit) / (1000 * 60 * 60 * 24));
+        inactiveList.push({ ...data, daysSince, id: doc.id });
+      }
+    });
+  }
+
+  // Fallback/Self-healing: Se não achou ninguém ou collection vazia, 
+  // varrer histórico recente e popular/checar
+  // (Isso garante que funcione com dados legados sem script de migração manual)
+  if (snapshot.empty) {
+    const queueRef = collection(db, "users", userId, "queue");
+    const qHist = query(queueRef, where("status", "==", "done"), limit(50));
+    const snapHist = await getDocs(qHist);
+
+    const tempMap = new Map();
+    snapHist.forEach(d => {
+      const data = d.data();
+      if (data.phone) {
+        const visit = data.completedAt || data.joinedAt;
+        if (!tempMap.has(data.phone) || visit > tempMap.get(data.phone).lastVisit) {
+          tempMap.set(data.phone, { name: data.name, phone: data.phone, lastVisit: visit });
+        }
+      }
+    });
+
+    // Processar map
+    for (const [phone, val] of tempMap.entries()) {
+      // Salvar no perfil para o futuro
+      await updateClientProfile(userId, phone, {
+        name: val.name,
+        lastVisit: val.lastVisit,
+        totalVisits: increment(1) // Estimativa inicial
+      });
+
+      if (val.lastVisit < cutoffTime) {
+        const daysSince = Math.floor((now - val.lastVisit) / (1000 * 60 * 60 * 24));
+        inactiveList.push({ ...val, daysSince, id: phone });
+      }
+    }
+  }
+
+  return inactiveList.sort((a, b) => b.daysSince - a.daysSince);
+}
+
+// Listener para todos os clientes (Tempo Real)
+export function listenClients(userId, callback) {
+  if (!userId) return () => { };
+  const clientsRef = collection(db, "users", userId, "clients");
+  const q = query(clientsRef, orderBy("lastVisit", "desc"), limit(50));
+
+  return onSnapshot(q, (snapshot) => {
+    const clients = [];
+    snapshot.forEach(doc => clients.push({ id: doc.id, ...doc.data() }));
+    callback(clients);
   });
 }
 
-// Atualizar dados do cliente
+// Obter todos os clientes (com paginação simples/limite)
+export async function getAllClients(userId, limitCount = 50) {
+  if (!userId) return [];
+
+  // 1. Tentar buscar da coleção de clientes
+  const clientsRef = collection(db, "users", userId, "clients");
+  const q = query(clientsRef, orderBy("lastVisit", "desc"), limit(limitCount));
+  const snapshot = await getDocs(q);
+
+  let clients = [];
+  snapshot.forEach(doc => {
+    clients.push({ id: doc.id, ...doc.data() });
+  });
+
+  // Fallback/Self-healing (igual ao getInactive) se a lista estiver vazia
+  if (clients.length === 0) {
+    const queueRef = collection(db, "users", userId, "queue");
+    // Pegar histórico geral para identificar clientes únicos
+    const qHist = query(queueRef, where("status", "==", "done"), orderBy("completedAt", "desc"), limit(100));
+    // Nota: orderBy 'completedAt' requer índice composto com 'status'. 
+    // Se der erro de índice, simplificamos para apenas 'done' e ordenamos em memória.
+    // Vamos usar safe query sem orderBy complexo para garantir
+    const qSafe = query(queueRef, where("status", "==", "done"), limit(100));
+    const snapHist = await getDocs(qSafe);
+
+    const tempMap = new Map();
+    snapHist.forEach(d => {
+      const data = d.data();
+      if (data.phone) {
+        const visit = data.completedAt || data.joinedAt;
+        if (!tempMap.has(data.phone) || visit > tempMap.get(data.phone).lastVisit) {
+          tempMap.set(data.phone, { name: data.name, phone: data.phone, lastVisit: visit, totalVisits: 1 });
+        }
+      }
+    });
+    clients = Array.from(tempMap.values());
+    clients.sort((a, b) => b.lastVisit - a.lastVisit);
+  }
+
+  return clients;
+}
+
+
+// Atualizar dados do cliente na fila
 export async function updateClient(userId, clientId, data) {
   await updateDoc(doc(db, "users", userId, "queue", clientId), data);
 }
@@ -361,6 +579,16 @@ export async function getFullHistory(userId) {
   return history;
 }
 
+// 💸 DESPESAS
+export async function addExpense(userId, expense) {
+  if (!userId) return;
+  const expensesRef = collection(db, "users", userId, "expenses");
+  await addDoc(expensesRef, {
+    ...expense,
+    createdAt: Date.now(),
+  });
+}
+
 // 📊 ESTATÍSTICAS DO DASHBOARD
 export async function getDashboardStats(userId) {
   if (!userId) return null;
@@ -382,17 +610,36 @@ export async function getDashboardStats(userId) {
     const q = query(queue, where("status", "==", "done"));
     const snapshot = await getDocs(q);
 
+    // Fetch Expenses (Current Month)
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const expensesRef = collection(db, "users", userId, "expenses");
+    const expensesQuery = query(expensesRef, where("createdAt", ">=", startOfMonth));
+    const expensesSnapshot = await getDocs(expensesQuery);
+
+    let totalExpenses = 0;
+    expensesSnapshot.forEach(doc => {
+      totalExpenses += parseFloat(doc.data().amount || 0);
+    });
+
     // 1. Initial Setup
     const stats = {
       today: { revenue: 0, clients: 0 },
       week: { revenue: 0, clients: 0 },
-      month: { revenue: 0, clients: 0 },
+      month: { revenue: 0, clients: 0, expenses: totalExpenses },
       lastMonth: { revenue: 0, clients: 0 }, // For comparison
       loyalty: { new: 0, recurring: 0 }, // For loyalty analysis
       services: {},
       dailyRevenue: {},
-      paymentMethods: {}
+
+      paymentMethods: {},
+      heatmap: {} // { 0: { 8: 0...}, ... }
     };
+
+    // Initialize Heatmap 7 days x Hours 8-22
+    for (let d = 0; d < 7; d++) {
+      stats.heatmap[d] = {};
+      for (let h = 8; h <= 22; h++) stats.heatmap[d][h] = 0;
+    }
 
     // Dates for formatting
     for (let i = 6; i >= 0; i--) {
@@ -424,6 +671,15 @@ export async function getDashboardStats(userId) {
         } else {
           clientHistory.set(phone, completedAt);
         }
+      }
+
+      // Heatmap Logic (All Time - or at least last 90 days efficiently)
+      // Note: We use the same 'completedAt' timestamp
+      const date = new Date(completedAt);
+      const day = date.getDay(); // 0-6
+      const hour = date.getHours();
+      if (hour >= 8 && hour <= 22) { // Focus on business hours
+        stats.heatmap[day][hour] = (stats.heatmap[day][hour] || 0) + 1;
       }
 
       // --- Current Month Analysis (Last 30 Days) ---

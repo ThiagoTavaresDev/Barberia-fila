@@ -89,3 +89,8 @@ export function listenBarberStatus(userId, callback) {
 export async function endBreak(userId) {
     await setBarberStatus(userId, "available");
 }
+
+export async function toggleBarberStatus(userId, isOpen) {
+    const status = isOpen ? 'available' : 'closed';
+    await setBarberStatus(userId, status);
+}

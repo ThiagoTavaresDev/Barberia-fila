@@ -7,6 +7,7 @@ export default function GoalConfigModal({ show, onClose }) {
     const [formData, setFormData] = useState({
         monthlyGoal: "",
         dailyGoal: "",
+        fixedCosts: ""
     });
     const [isLoading, setIsLoading] = useState(false);
 
@@ -15,6 +16,7 @@ export default function GoalConfigModal({ show, onClose }) {
             setFormData({
                 monthlyGoal: user.monthlyGoal || "",
                 dailyGoal: user.dailyGoal || "",
+                fixedCosts: user.fixedCosts || ""
             });
         }
     }, [user, show]);
@@ -24,7 +26,8 @@ export default function GoalConfigModal({ show, onClose }) {
         try {
             await updateProfile({
                 monthlyGoal: formData.monthlyGoal,
-                dailyGoal: formData.dailyGoal
+                dailyGoal: formData.dailyGoal,
+                fixedCosts: formData.fixedCosts
             });
             onClose();
         } catch (error) {
@@ -72,6 +75,27 @@ export default function GoalConfigModal({ show, onClose }) {
                                 className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-600"
                             />
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-gray-400 text-sm mb-1">Custo Fixo Mensal (R$)</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-3 text-gray-500 font-bold">R$</span>
+                            <input
+                                type="number"
+                                value={formData.fixedCosts}
+                                min="0"
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "" || parseFloat(val) >= 0) {
+                                        setFormData({ ...formData, fixedCosts: val });
+                                    }
+                                }}
+                                placeholder="Aluguel, Luz, etc..."
+                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-600"
+                            />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 ml-1">Para calcular seu lucro líquido.</p>
                     </div>
 
                     <div>

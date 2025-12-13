@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Scissors, Users, Trash2, CheckCircle, Clock, User, Phone, Briefcase, Plus,
   Settings, ArrowUp, ArrowDown, MessageCircle, History, DollarSign,
-  Calendar, CalendarClock, XCircle, PlayCircle, Coffee, Camera, QrCode
+  Calendar, CalendarClock, XCircle, PlayCircle, Coffee, Camera, QrCode, UserCog
 } from "lucide-react";
 import LiveTimer from "./LiveTimer";
 import { compressImage } from "../utils/imageUtils";
@@ -14,7 +14,7 @@ import {
   listenServices, addClient, removeClient, moveClient, completeFirst,
   listenQueue, listenAppointments, moveAppointmentToQueue, cancelAppointment,
   cancelClient, getFullHistory, updateClient, undoComplete,
-  addService, addAppointment, removeService // Imported missing functions directly
+  addService, addAppointment, removeService, getClientProfile
 } from "../services/queueService";
 import { listenBarberStatus, endBreak } from "../services/barberStatus";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +27,8 @@ import QrModal from "./modals/QrModal";
 import BreakModal from "./modals/BreakModal";
 import { ProfileModal } from "./modals/ProfileModal";
 import FinishServiceModal from "./modals/FinishServiceModal";
+import ClientProfileModal from "./modals/ClientProfileModal";
+import ClientsView from "./ClientsView";
 
 export default function BarberView() {
   const { user, logout } = useAuth();
@@ -50,6 +52,10 @@ export default function BarberView() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [clientToFinish, setClientToFinish] = useState(null);
+
+  // CRM States
+  const [showClientProfileModal, setShowClientProfileModal] = useState(false);
+  const [selectedClientForProfile, setSelectedClientForProfile] = useState(null);
 
   // Estados para Status do Barbeiro
   const [barberStatus, setLocalBarberStatus] = useState({ status: 'available' });
@@ -79,7 +85,7 @@ export default function BarberView() {
     time: "",
     time: "",
     serviceId: "",
-    recurrenceCount: 1, // Default 1 (just once)
+    recurrenceCount: 1,
   });
 
   useEffect(() => {
@@ -195,6 +201,38 @@ export default function BarberView() {
 
     setNewClient({ ...newClient, name: "", phone: "", noPhone: false, notes: "" });
   };
+
+  // Auto-detect client when phone changes
+  useEffect(() => {
+    const checkClient = async () => {
+      const phone = newClient.phone;
+      if (!phone || phone.length < 8) return;
+
+      // Debounce simple implementation
+      const timeoutId = setTimeout(async () => {
+        try {
+          const profile = await getClientProfile(userId, phone);
+          if (profile && profile.name) {
+            setNewClient(prev => {
+              // Only update if name is different to avoid loop
+              if (prev.name === profile.name) return prev;
+              return {
+                ...prev,
+                name: profile.name,
+                notes: prev.notes || profile.notes || ""
+              };
+            });
+          }
+        } catch (error) {
+          console.error("Error checking client:", error);
+        }
+      }, 800); // Wait 800ms after typing stops
+
+      return () => clearTimeout(timeoutId);
+    };
+
+    checkClient();
+  }, [newClient.phone, userId]);
 
   const handleAddService = async () => {
     if (!newService.name || !newService.duration || !newService.price) return;
@@ -354,6 +392,11 @@ export default function BarberView() {
     }
   };
 
+  const handleOpenClientProfile = (client) => {
+    setSelectedClientForProfile(client);
+    setShowClientProfileModal(true);
+  };
+
   // Total Queue Time
   const totalQueueTime = queue.reduce((acc, curr) => acc + (curr.serviceDuration || 30), 0);
 
@@ -401,6 +444,9 @@ export default function BarberView() {
             </button>
             <button onClick={() => setCurrentView("dashboard")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "dashboard" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
               <DollarSign className="w-4 h-4" /> <span>Financeiro</span>
+            </button>
+            <button onClick={() => setCurrentView("clients")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "clients" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
+              <UserCog className="w-4 h-4" /> <span>Clientes</span>
             </button>
           </div>
 
@@ -499,6 +545,13 @@ export default function BarberView() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button
+                          onClick={() => handleOpenClientProfile(client)}
+                          className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                          title="Perfil & Notas"
+                        >
+                          <User className="w-5 h-5" />
+                        </button>
                         {index === 0 ? (
                           <button onClick={handleComplete} className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
                             <CheckCircle className="w-5 h-5" /> Finalizar
@@ -605,6 +658,9 @@ export default function BarberView() {
         {/* DASHBOARD VIEW */}
         {currentView === "dashboard" && <DashboardView userId={userId} user={user} />}
 
+        {/* CLIENTS VIEW */}
+        {currentView === "clients" && <ClientsView userId={userId} onOpenProfile={handleOpenClientProfile} />}
+
       </div>
 
       {/* MODALS */}
@@ -619,6 +675,8 @@ export default function BarberView() {
       <BreakModal show={showBreakModal} onClose={() => setShowBreakModal(false)} barberStatus={barberStatus} breakTimeRemaining={breakTimeRemaining} userId={userId} />
 
       <ProfileModal show={showProfileModal} onClose={() => setShowProfileModal(false)} />
+
+      <ClientProfileModal show={showClientProfileModal} onClose={() => setShowClientProfileModal(false)} client={selectedClientForProfile} />
 
       <FinishServiceModal
         show={showFinishModal}
