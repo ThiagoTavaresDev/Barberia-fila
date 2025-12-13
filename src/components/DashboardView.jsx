@@ -468,7 +468,7 @@ export default function DashboardView({ userId, user }) {
                 </div>
             </div>
 
-            {/* Gráfico de Receita (CSS Puro) - Mover para baixo para ter uma linha completa */}
+            {/* Gráfico de Receita (CSS Puro) */}
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 mt-6">
                 <h3 className="text-lg font-bold text-white mb-6">Faturamento (Últimos 7 dias)</h3>
                 <div className="flex justify-between h-48 gap-2">
@@ -499,6 +499,151 @@ export default function DashboardView({ userId, user }) {
                             </div>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* NOVOS GRÁFICOS: Faturamento por Método & Dias da Semana */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                {/* Faturamento por Método (R$) */}
+                <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-green-500" />
+                        Faturamento Real por Método
+                    </h3>
+                    <div className="space-y-4">
+                        {['pix', 'money', 'card'].map((method) => {
+                            const total = stats.revenueByPaymentMethod?.[method] || 0;
+                            const percent = stats.month.revenue > 0 ? (total / stats.month.revenue) * 100 : 0;
+                            const colors = { pix: 'bg-green-500', money: 'bg-blue-500', card: 'bg-amber-500' };
+                            const labels = { pix: 'Pix', money: 'Dinheiro', card: 'Cartão' };
+
+                            return (
+                                <div key={method}>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-gray-300">{labels[method]}</span>
+                                        <span className="text-white font-bold">R$ {total.toFixed(2)} ({percent.toFixed(0)}%)</span>
+                                    </div>
+                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                        <div
+                                            className={`${colors[method]} h-2 rounded-full`}
+                                            style={{ width: `${percent}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Dias Mais Lucrativos */}
+                <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-purple-500" />
+                        Dias Mais Lucrativos
+                    </h3>
+                    <div className="space-y-3">
+                        {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                            const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+                            const total = stats.revenueWeekDays?.[day] || 0;
+                            const max = Math.max(...Object.values(stats.revenueWeekDays || { 0: 1 }), 1);
+                            const percent = (total / max) * 100;
+
+                            if (total === 0) return null; // Hide empty days to save space or keep clean
+
+                            return (
+                                <div key={day} className="flex items-center gap-2 text-sm">
+                                    <div className="w-16 text-gray-400 shrink-0">{days[day]}</div>
+                                    <div className="flex-1 bg-gray-700/50 rounded-full h-3">
+                                        <div
+                                            className="bg-purple-500 h-3 rounded-full"
+                                            style={{ width: `${percent}%` }}
+                                        ></div>
+                                    </div>
+                                    <div className="w-20 text-right text-white font-bold">R$ {total.toFixed(0)}</div>
+                                </div>
+                            );
+                        })}
+                        {Object.values(stats.revenueWeekDays || {}).every(v => v === 0) && (
+                            <p className="text-gray-500 text-center py-4">Sem dados suficientes.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* NOVOS GRÁFICOS: Despesas & Receita por Fidelidade */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                {/* Despesas por Categoria */}
+                <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-red-500" />
+                        Despesas por Categoria
+                    </h3>
+                    <div className="space-y-4">
+                        {Object.entries(stats.expensesByCategory || {}).map(([cat, amount]) => {
+                            const total = stats.month.expenses || 1;
+                            const percent = (amount / total) * 100;
+                            const labels = {
+                                general: 'Geral',
+                                supplies: 'Insumos',
+                                products: 'Produtos',
+                                infrastructure: 'Infra',
+                                marketing: 'Marketing'
+                            };
+
+                            return (
+                                <div key={cat}>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-gray-300">{labels[cat] || cat}</span>
+                                        <span className="text-white font-bold">R$ {amount.toFixed(2)} ({percent.toFixed(0)}%)</span>
+                                    </div>
+                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                        <div
+                                            className="bg-red-500 h-2 rounded-full"
+                                            style={{ width: `${percent}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {(!stats.expensesByCategory || Object.keys(stats.expensesByCategory).length === 0) && (
+                            <p className="text-gray-500 text-center py-4">Nenhuma despesa registrada.</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Receita: Novos vs Recorrentes */}
+                <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-blue-500" />
+                        Receita: Origem do Cliente
+                    </h3>
+                    {stats.month.revenue > 0 ? (
+                        <div className="flex flex-col justify-center h-full pb-6">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="flex-1 bg-gray-700/30 p-4 rounded-lg border border-blue-500/20">
+                                    <span className="text-blue-400 text-sm font-bold block mb-1">Novos</span>
+                                    <span className="text-2xl text-white font-bold">R$ {stats.revenueByLoyalty?.new.toFixed(0)}</span>
+                                    <div className="w-full bg-gray-700 h-1.5 rounded-full mt-2">
+                                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${(stats.revenueByLoyalty?.new / stats.month.revenue) * 100}%` }}></div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 bg-gray-700/30 p-4 rounded-lg border border-amber-500/20">
+                                    <span className="text-amber-400 text-sm font-bold block mb-1">Recorrentes</span>
+                                    <span className="text-2xl text-white font-bold">R$ {stats.revenueByLoyalty?.recurring.toFixed(0)}</span>
+                                    <div className="w-full bg-gray-700 h-1.5 rounded-full mt-2">
+                                        <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${(stats.revenueByLoyalty?.recurring / stats.month.revenue) * 100}%` }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-center text-sm text-gray-400">
+                                {stats.revenueByLoyalty?.recurring > stats.revenueByLoyalty?.new
+                                    ? "🔒 A maior parte da sua receita vem da fidelização!"
+                                    : "🚀 Você está atraindo muitos clientes novos!"}
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="text-gray-500 text-center py-4">Sem receita para analisar.</p>
+                    )}
                 </div>
             </div>
 

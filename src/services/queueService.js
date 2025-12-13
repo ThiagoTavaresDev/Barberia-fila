@@ -645,8 +645,15 @@ export async function getDashboardStats(userId) {
     const expensesSnapshot = await getDocs(expensesQuery);
 
     let totalExpenses = 0;
+    const expensesBreakdown = {};
     expensesSnapshot.forEach(doc => {
-      totalExpenses += parseFloat(doc.data().amount || 0);
+      const data = doc.data();
+      const amount = parseFloat(data.amount || 0);
+      totalExpenses += amount;
+
+      const cat = data.category || 'general';
+      if (!expensesBreakdown[cat]) expensesBreakdown[cat] = 0;
+      expensesBreakdown[cat] += amount;
     });
 
     // 1. Initial Setup
@@ -660,6 +667,15 @@ export async function getDashboardStats(userId) {
       dailyRevenue: {},
 
       paymentMethods: {},
+      revenueByPaymentMethod: { pix: 0, money: 0, card: 0 },
+      revenueWeekDays: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+      expensesByCategory: expensesBreakdown,
+      revenueByLoyalty: { new: 0, recurring: 0 },
+      paymentMethods: {},
+      revenueByPaymentMethod: { pix: 0, money: 0, card: 0 },
+      revenueWeekDays: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+      expensesByCategory: {},
+      revenueByLoyalty: { new: 0, recurring: 0 },
       heatmap: {} // { 0: { 8: 0...}, ... }
     };
 
@@ -733,6 +749,24 @@ export async function getDashboardStats(userId) {
         const method = data.paymentMethod || 'money';
         if (!stats.paymentMethods[method]) stats.paymentMethods[method] = 0;
         stats.paymentMethods[method] += 1;
+
+        // Revenue by Payment Method (Month)
+        if (stats.revenueByPaymentMethod[method] !== undefined) {
+          stats.revenueByPaymentMethod[method] += price;
+        }
+
+        // Revenue by Week Day (Month)
+        const d = new Date(completedAt).getDay();
+        if (stats.revenueWeekDays[d] !== undefined) {
+          stats.revenueWeekDays[d] += price;
+        }
+
+        // Revenue by Loyalty
+        if (isRecurring) {
+          stats.revenueByLoyalty.recurring += price;
+        } else {
+          stats.revenueByLoyalty.new += price;
+        }
 
         // Week Analysis
         if (completedAt >= startOfWeek.getTime()) {
