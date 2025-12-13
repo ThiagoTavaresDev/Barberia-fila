@@ -55,12 +55,9 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
         <div
             ref={ref}
             // FIXED WIDTH enforced for consistent "print" output
-            className={`bg-gradient-to-br ${tierConfig.gradient} p-6 rounded-xl border ${tierConfig.border} shadow-2xl relative overflow-hidden group mx-auto`}
+            className={`bg-gradient-to-br ${tierConfig.gradient} p-4 sm:p-6 rounded-xl border ${tierConfig.border} shadow-2xl relative overflow-hidden group mx-auto w-full max-w-[400px] aspect-[1.67/1]`}
             style={{
-                width: '400px',
-                height: '240px',
-                minWidth: '400px', // Prevent shrinking
-                minHeight: '240px'
+                // Removed fixed width constraints for mobile responsiveness
             }}
         >
             {/* Efeito de brilho no fundo */}
