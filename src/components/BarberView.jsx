@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
+import InventoryView from "./InventoryView";
 import {
   Scissors, Users, Trash2, CheckCircle, Clock, User, Phone, Briefcase, Plus,
   Settings, ArrowUp, ArrowDown, MessageCircle, History, DollarSign,
-  Calendar, CalendarClock, XCircle, PlayCircle, Coffee, Camera, QrCode, UserCog
+  Calendar, CalendarClock, XCircle, PlayCircle, Coffee, Camera, QrCode, UserCog, Package
 } from "lucide-react";
 import LiveTimer from "./LiveTimer";
 import { compressImage } from "../utils/imageUtils";
@@ -14,7 +15,7 @@ import {
   listenServices, addClient, removeClient, moveClient, completeFirst,
   listenQueue, listenAppointments, moveAppointmentToQueue, cancelAppointment,
   cancelClient, getFullHistory, updateClient, undoComplete,
-  addService, addAppointment, removeService, getClientProfile
+  addService, addAppointment, removeService, getClientProfile, listenProducts
 } from "../services/queueService";
 import { listenBarberStatus, endBreak } from "../services/barberStatus";
 import { useAuth } from "../context/AuthContext";
@@ -36,6 +37,7 @@ export default function BarberView() {
 
   const [queue, setQueue] = useState([]);
   const [services, setServices] = useState([]);
+  const [products, setProducts] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -76,13 +78,13 @@ export default function BarberView() {
     name: "",
     duration: "",
     price: "",
+    materials: [], // Array of { productId, quantity }
   });
 
   const [newAppointment, setNewAppointment] = useState({
     name: "",
     phone: "",
     date: "",
-    time: "",
     time: "",
     serviceId: "",
     recurrenceCount: 1,
@@ -102,11 +104,13 @@ export default function BarberView() {
     });
     const unsubscribeServices = listenServices(userId, setServices);
     const unsubscribeAppointments = listenAppointments(userId, setAppointments);
+    const unsubscribeProducts = listenProducts(userId, setProducts);
 
     return () => {
       unsubscribeQueue();
       unsubscribeServices();
       unsubscribeAppointments();
+      unsubscribeProducts();
     };
   }, [userId]);
 
@@ -183,6 +187,7 @@ export default function BarberView() {
       serviceDuration: selectedService.duration,
       servicePrice: selectedService.price,
       notes: newClient.notes,
+      materials: selectedService.materials || [], // Snapshot materials
     };
 
     const { id } = await addClient(userId, clientData);
@@ -236,8 +241,8 @@ export default function BarberView() {
 
   const handleAddService = async () => {
     if (!newService.name || !newService.duration || !newService.price) return;
-    await addService(userId, newService.name, newService.duration, newService.price);
-    setNewService({ name: "", duration: "", price: "" });
+    await addService(userId, newService.name, newService.duration, newService.price, newService.materials);
+    setNewService({ name: "", duration: "", price: "", materials: [] });
   };
 
   const handleRemoveServiceWrapper = async (id) => {
@@ -447,6 +452,9 @@ export default function BarberView() {
             </button>
             <button onClick={() => setCurrentView("clients")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "clients" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
               <UserCog className="w-4 h-4" /> <span>Clientes</span>
+            </button>
+            <button onClick={() => setCurrentView("inventory")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "inventory" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
+              <Package className="w-4 h-4" /> <span>Estoque</span>
             </button>
           </div>
 
@@ -661,10 +669,13 @@ export default function BarberView() {
         {/* CLIENTS VIEW */}
         {currentView === "clients" && <ClientsView userId={userId} onOpenProfile={handleOpenClientProfile} />}
 
+        {/* INVENTORY VIEW */}
+        {currentView === "inventory" && <InventoryView userId={userId} />}
+
       </div>
 
       {/* MODALS */}
-      <ServiceModal show={showServiceModal} onClose={() => setShowServiceModal(false)} newService={newService} setNewService={setNewService} handleAddService={handleAddService} services={services} handleRemoveService={handleRemoveServiceWrapper} />
+      <ServiceModal show={showServiceModal} onClose={() => setShowServiceModal(false)} newService={newService} setNewService={setNewService} handleAddService={handleAddService} services={services} handleRemoveService={handleRemoveServiceWrapper} products={products} />
 
       <AppointmentModal show={showAppointmentModal} onClose={() => setShowAppointmentModal(false)} newAppointment={newAppointment} setNewAppointment={setNewAppointment} handleAddAppointment={handleAddAppointmentWrapper} services={services} />
 

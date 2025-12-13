@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
                 const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
                 let userData = {
                     id: firebaseUser.uid,
+                    uid: firebaseUser.uid,
                     email: firebaseUser.email,
                 };
 

@@ -30,12 +30,13 @@ const getCollections = (userId) => {
 // 🛠️ GERENCIAMENTO DE SERVIÇOS
 
 // Adicionar serviço
-export async function addService(userId, name, duration, price) {
+export async function addService(userId, name, duration, price, materials = []) {
   const { services } = getCollections(userId);
   await addDoc(services, {
     name,
     duration: parseInt(duration),
     price: parseFloat(price) || 0,
+    materials: materials || [],
   });
 }
 
@@ -84,6 +85,7 @@ export async function addClient(userId, clientData) {
     servicePrice: parseFloat(clientData.servicePrice) || 0,
     notes: clientData.notes || "",
     photoUrl: clientData.photoUrl || "",
+    materials: clientData.materials || [], // Snapshot materials for inventory deduction
     joinedAt,
     order,
     status: "waiting",
@@ -144,6 +146,20 @@ export async function completeFirst(userId, queueList, paymentMethod = 'money') 
     paymentMethod,
   });
 
+  // 1.5 Deduct Materials from Inventory
+  if (first.materials && Array.isArray(first.materials) && first.materials.length > 0) {
+    for (const mat of first.materials) {
+      if (mat.productId && mat.quantity > 0) {
+        const productRef = doc(db, "users", userId, "products", mat.productId);
+        // Use atomic increment to subtract stock
+        await updateDoc(productRef, {
+          quantity: increment(-mat.quantity),
+          updatedAt: Date.now()
+        }).catch(err => console.error(`Error deducting stock for ${mat.name}:`, err));
+      }
+    }
+  }
+
   // 2. Update Client Profile (CRM)
   if (first.phone) {
     const updates = {
@@ -154,6 +170,17 @@ export async function completeFirst(userId, queueList, paymentMethod = 'money') 
     };
 
     await updateClientProfile(userId, first.phone, updates);
+
+    // 3. Save Style Photo to Gallery (if exists)
+    if (first.photoUrl) {
+      const photoData = {
+        url: first.photoUrl,
+        serviceName: first.serviceName || "Atendimento",
+        date: now
+      };
+      // Fire and forget photo save to avoid blocking completion
+      addClientPhoto(userId, first.phone, photoData).catch(err => console.error("Error saving styling photo:", err));
+    }
   }
 } // Close completeFirst properly
 
@@ -325,7 +352,7 @@ export async function getAllClients(userId, limitCount = 50) {
   if (clients.length === 0) {
     const queueRef = collection(db, "users", userId, "queue");
     // Pegar histórico geral para identificar clientes únicos
-    const qHist = query(queueRef, where("status", "==", "done"), orderBy("completedAt", "desc"), limit(100));
+    // Pegar histórico geral para identificar clientes únicos
     // Nota: orderBy 'completedAt' requer índice composto com 'status'. 
     // Se der erro de índice, simplificamos para apenas 'done' e ordenamos em memória.
     // Vamos usar safe query sem orderBy complexo para garantir
@@ -498,6 +525,7 @@ export async function moveAppointmentToQueue(userId, appointment) {
     status: "waiting",
     source: "appointment",
     appointmentId: appointment.id,
+    materials: appointment.materials || [], // Pass through materials if they exist
   });
 
   // Atualizar status do agendamento
@@ -734,4 +762,85 @@ export async function getDashboardStats(userId) {
     console.error("Error fetching dashboard stats:", error);
     return null;
   }
+}
+
+// 📦 GERENCIAMENTO DE ESTOQUE (INVENTORY)
+
+// Listener de Produtos
+export function listenProducts(userId, callback) {
+  if (!userId) return () => { };
+  const productsRef = collection(db, "users", userId, "products");
+  const q = query(productsRef, orderBy("name")); // Sort by name
+
+  return onSnapshot(q, (snapshot) => {
+    const products = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    callback(products);
+  }, (error) => {
+    console.error("Error listening to products:", error);
+    callback([]);
+  });
+}
+
+// Adicionar produto
+export async function addProduct(userId, productData) {
+  const productsRef = collection(db, "users", userId, "products");
+  await addDoc(productsRef, {
+    ...productData,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+}
+
+// Atualizar produto (ex: dar baixa no estoque)
+export async function updateProduct(userId, productId, updates) {
+  const productRef = doc(db, "users", userId, "products", productId);
+  await updateDoc(productRef, {
+    ...updates,
+    updatedAt: Date.now()
+  });
+}
+
+// Remover produto
+export async function removeProduct(userId, productId) {
+  const productRef = doc(db, "users", userId, "products", productId);
+  await deleteDoc(productRef);
+}
+
+// 📸 GALERIA DE ESTILO (STYLE GALLERY)
+
+// Adicionar foto à galeria do cliente
+export async function addClientPhoto(userId, clientPhone, photoData) {
+  if (!userId || !clientPhone) return;
+  // Sanitizar telefone para usar como ID de documento/coleção se necessário
+  // mas aqui estamos usando subcoleção dentro de um "cliente fictício" ou query?
+  // O sistema atual usa 'phone' como chave principal para perfis em getClientProfile via query.
+  // Vamos usar uma coleção 'client_photos' raiz ou dentro do documento do user?
+  // Melhor: users/{userId}/client_photos/{photoId} com campo 'clientPhone' para query.
+  // Isso evita ter que achar o doc do cliente se ele não existir fisicamente como doc (apenas no array de clients ou historico).
+
+  const photosRef = collection(db, "users", userId, "client_photos");
+  await addDoc(photosRef, {
+    clientPhone,
+    ...photoData,
+    createdAt: Date.now()
+  });
+}
+
+// Obter fotos do cliente
+export async function getClientPhotos(userId, clientPhone) {
+  if (!userId || !clientPhone) return [];
+  const photosRef = collection(db, "users", userId, "client_photos");
+  const q = query(photosRef, where("clientPhone", "==", clientPhone), orderBy("createdAt", "desc"));
+
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+// Deletar foto
+export async function deleteClientPhoto(userId, photoId) {
+  const photoRef = doc(db, "users", userId, "client_photos", photoId);
+  await deleteDoc(photoRef);
 }
