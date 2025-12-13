@@ -14,15 +14,22 @@ import {
 
 import { db } from "../firebase";
 
-const queueCollection = collection(db, "queue");
-const servicesCollection = collection(db, "services");
-const appointmentsCollection = collection(db, "appointments");
+// Helper para obter referências de coleção baseadas no userId
+const getCollections = (userId) => {
+  if (!userId) throw new Error("UserId is required for database operations");
+  return {
+    queue: collection(db, "users", userId, "queue"),
+    services: collection(db, "users", userId, "services"),
+    appointments: collection(db, "users", userId, "appointments")
+  };
+};
 
 // 🛠️ GERENCIAMENTO DE SERVIÇOS
 
 // Adicionar serviço
-export async function addService(name, duration, price) {
-  await addDoc(servicesCollection, {
+export async function addService(userId, name, duration, price) {
+  const { services } = getCollections(userId);
+  await addDoc(services, {
     name,
     duration: parseInt(duration),
     price: parseFloat(price) || 0,
@@ -30,13 +37,15 @@ export async function addService(name, duration, price) {
 }
 
 // Remover serviço
-export async function removeService(id) {
-  await deleteDoc(doc(db, "services", id));
+export async function removeService(userId, id) {
+  await deleteDoc(doc(db, "users", userId, "services", id));
 }
 
 // Listener de serviços
-export function listenServices(callback) {
-  const q = query(servicesCollection, orderBy("name"));
+export function listenServices(userId, callback) {
+  if (!userId) return () => { };
+  const { services } = getCollections(userId);
+  const q = query(services, orderBy("name"));
 
   return onSnapshot(q, (snapshot) => {
     const list = [];
@@ -50,19 +59,21 @@ export function listenServices(callback) {
 // 👥 GERENCIAMENTO DE FILA
 
 // Obter a próxima ordem disponível
-async function getNextOrder() {
-  const q = query(queueCollection, orderBy("order", "desc"), limit(1));
+async function getNextOrder(userId) {
+  const { queue } = getCollections(userId);
+  const q = query(queue, orderBy("order", "desc"), limit(1));
   const snapshot = await getDocs(q);
   if (snapshot.empty) return 1;
   return (snapshot.docs[0].data().order || 0) + 1;
 }
 
 // Adicionar cliente
-export async function addClient(clientData) {
+export async function addClient(userId, clientData) {
+  const { queue } = getCollections(userId);
   const joinedAt = Date.now();
-  const order = await getNextOrder();
+  const order = await getNextOrder(userId);
 
-  const docRef = await addDoc(queueCollection, {
+  const docRef = await addDoc(queue, {
     name: clientData.name,
     phone: clientData.phone,
     serviceName: clientData.serviceName,
@@ -79,24 +90,23 @@ export async function addClient(clientData) {
 }
 
 // Remover cliente
-export async function removeClient(id) {
-  await deleteDoc(doc(db, "queue", id));
+export async function removeClient(userId, id) {
+  await deleteDoc(doc(db, "users", userId, "queue", id));
 }
 
 // Mover cliente na fila (trocar ordem)
-export async function moveClient(client, direction, queue) {
-  const currentIndex = queue.findIndex((c) => c.id === client.id);
+export async function moveClient(userId, client, direction, queueList) {
+  const currentIndex = queueList.findIndex((c) => c.id === client.id);
   if (currentIndex === -1) return;
 
   const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
 
   // Verificar limites
-  if (targetIndex < 0 || targetIndex >= queue.length) return;
+  if (targetIndex < 0 || targetIndex >= queueList.length) return;
 
-  const targetClient = queue[targetIndex];
+  const targetClient = queueList[targetIndex];
 
   // Trocar os valores de 'order'
-  // Se por acaso eles tiverem a mesma ordem (legado), ajusta.
   let clientOrder = client.order || 0;
   let targetOrder = targetClient.order || 0;
 
@@ -105,39 +115,42 @@ export async function moveClient(client, direction, queue) {
     targetOrder = targetIndex + 1;
   }
 
-  await updateDoc(doc(db, "queue", client.id), { order: targetOrder });
-  await updateDoc(doc(db, "queue", targetClient.id), { order: clientOrder });
+  await updateDoc(doc(db, "users", userId, "queue", client.id), { order: targetOrder });
+  await updateDoc(doc(db, "users", userId, "queue", targetClient.id), { order: clientOrder });
 }
 
-// Finalizar atendimento (marcar o 1º da fila como done)
-export async function completeFirst(queue) {
-  if (queue.length === 0) return;
+// Finalizar atendimento
+export async function completeFirst(userId, queueList) {
+  if (queueList.length === 0) return;
 
-  const first = queue[0];
+  const first = queueList[0];
 
-  await updateDoc(doc(db, "queue", first.id), {
+  await updateDoc(doc(db, "users", userId, "queue", first.id), {
     status: "done",
     completedAt: Date.now(),
   });
 }
 
 // Atualizar dados do cliente
-export async function updateClient(clientId, data) {
-  await updateDoc(doc(db, "queue", clientId), data);
+export async function updateClient(userId, clientId, data) {
+  await updateDoc(doc(db, "users", userId, "queue", clientId), data);
 }
 
-// Desfazer conclusão (voltar para fila)
-export async function undoComplete(clientId) {
-  await updateDoc(doc(db, "queue", clientId), {
+// Desfazer conclusão
+export async function undoComplete(userId, clientId) {
+  await updateDoc(doc(db, "users", userId, "queue", clientId), {
     status: "waiting",
     completedAt: null,
   });
 }
 
 // Listener em tempo real da fila
-export function listenQueue(callback) {
+export function listenQueue(userId, callback) {
+  if (!userId) return () => { };
+
+  const { queue } = getCollections(userId);
   // Ordenar por 'order' e depois por 'joinedAt' como fallback
-  const q = query(queueCollection, orderBy("order", "asc"));
+  const q = query(queue, orderBy("order", "asc"));
 
   return onSnapshot(q, (snapshot) => {
     const list = [];
@@ -149,7 +162,7 @@ export function listenQueue(callback) {
       }
     });
 
-    // Fallback de ordenação no cliente se 'order' for null em registros antigos
+    // Fallback de ordenação
     list.sort((a, b) => {
       const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
       const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
@@ -162,35 +175,34 @@ export function listenQueue(callback) {
 }
 
 // Obter histórico do dia
-export async function getDailyHistory() {
+export async function getDailyHistory(userId) {
+  if (!userId) return [];
+
+  const { queue } = getCollections(userId);
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const startTimestamp = startOfDay.getTime();
 
-  // Pegar todos os atendimentos finalizados
-  // (Para produção, ideal seria usar query composta com data, mas requer índice)
-  const q = query(queueCollection, where("status", "==", "done"));
+  const q = query(queue, where("status", "==", "done"));
   const snapshot = await getDocs(q);
 
   const history = [];
   snapshot.forEach((doc) => {
     const data = doc.data();
-    // Filtrar apenas os de hoje
     const completedAt = data.completedAt || data.joinedAt;
     if (completedAt >= startTimestamp) {
       history.push({ id: doc.id, ...data });
     }
   });
 
-  // Ordenar do mais recente para o mais antigo
   history.sort((a, b) => (b.completedAt || b.joinedAt) - (a.completedAt || a.joinedAt));
 
   return history;
 }
 
-// Salvar avaliação do cliente
-export async function submitRating(clientId, rating) {
-  await updateDoc(doc(db, "queue", clientId), {
+// Salvar avaliação
+export async function submitRating(userId, clientId, rating) {
+  await updateDoc(doc(db, "users", userId, "queue", clientId), {
     rating: parseInt(rating),
     ratedAt: Date.now(),
   });
@@ -199,12 +211,13 @@ export async function submitRating(clientId, rating) {
 // 📅 GERENCIAMENTO DE AGENDAMENTOS
 
 // Adicionar agendamento
-export async function addAppointment(appointmentData) {
-  const docRef = await addDoc(appointmentsCollection, {
+export async function addAppointment(userId, appointmentData) {
+  const { appointments } = getCollections(userId);
+  const docRef = await addDoc(appointments, {
     name: appointmentData.name,
     phone: appointmentData.phone || "",
-    scheduledDate: appointmentData.scheduledDate, // timestamp
-    scheduledTime: appointmentData.scheduledTime, // "14:30"
+    scheduledDate: appointmentData.scheduledDate,
+    scheduledTime: appointmentData.scheduledTime,
     serviceName: appointmentData.serviceName || "",
     serviceDuration: parseInt(appointmentData.serviceDuration) || 0,
     servicePrice: parseFloat(appointmentData.servicePrice) || 0,
@@ -216,9 +229,12 @@ export async function addAppointment(appointmentData) {
 }
 
 // Listener de agendamentos
-export function listenAppointments(callback) {
+export function listenAppointments(userId, callback) {
+  if (!userId) return () => { };
+
+  const { appointments } = getCollections(userId);
   const q = query(
-    appointmentsCollection,
+    appointments,
     where("status", "==", "scheduled"),
     orderBy("scheduledDate", "asc")
   );
@@ -233,10 +249,11 @@ export function listenAppointments(callback) {
 }
 
 // Mover agendamento para fila ativa
-export async function moveAppointmentToQueue(appointment) {
-  // Adicionar à fila
-  const order = await getNextOrder();
-  const docRef = await addDoc(queueCollection, {
+export async function moveAppointmentToQueue(userId, appointment) {
+  const { queue } = getCollections(userId);
+
+  const order = await getNextOrder(userId);
+  const docRef = await addDoc(queue, {
     name: appointment.name,
     phone: appointment.phone,
     serviceName: appointment.serviceName || "A definir",
@@ -250,7 +267,7 @@ export async function moveAppointmentToQueue(appointment) {
   });
 
   // Atualizar status do agendamento
-  await updateDoc(doc(db, "appointments", appointment.id), {
+  await updateDoc(doc(db, "users", userId, "appointments", appointment.id), {
     status: "moved_to_queue",
     movedAt: Date.now(),
   });
@@ -259,23 +276,26 @@ export async function moveAppointmentToQueue(appointment) {
 }
 
 // Cancelar agendamento
-export async function cancelAppointment(appointmentId) {
-  await updateDoc(doc(db, "appointments", appointmentId), {
+export async function cancelAppointment(userId, appointmentId) {
+  await updateDoc(doc(db, "users", userId, "appointments", appointmentId), {
     status: "cancelled",
     cancelledAt: Date.now(),
   });
 }
 
 // Cancelar cliente da fila
-export async function cancelClient(clientId) {
-  await updateDoc(doc(db, "queue", clientId), {
+export async function cancelClient(userId, clientId) {
+  await updateDoc(doc(db, "users", userId, "queue", clientId), {
     status: "cancelled",
     cancelledAt: Date.now(),
   });
 }
 
-// Obter histórico completo (incluindo cancelados)
-export async function getFullHistory() {
+// Obter histórico completo
+export async function getFullHistory(userId) {
+  if (!userId) return [];
+  const { queue, appointments } = getCollections(userId);
+
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const startTimestamp = startOfDay.getTime();
@@ -283,13 +303,8 @@ export async function getFullHistory() {
   const history = [];
 
   try {
-    // Pegar clientes finalizados
-    const doneQuery = query(
-      queueCollection,
-      where("status", "==", "done")
-    );
+    const doneQuery = query(queue, where("status", "==", "done"));
     const doneSnapshot = await getDocs(doneQuery);
-
     doneSnapshot.forEach((doc) => {
       const data = doc.data();
       const timestamp = data.completedAt || data.joinedAt;
@@ -297,18 +312,9 @@ export async function getFullHistory() {
         history.push({ id: doc.id, ...data, type: "queue" });
       }
     });
-  } catch (error) {
-    console.error("Error fetching done clients:", error);
-  }
 
-  try {
-    // Pegar clientes cancelados
-    const cancelledQuery = query(
-      queueCollection,
-      where("status", "==", "cancelled")
-    );
+    const cancelledQuery = query(queue, where("status", "==", "cancelled"));
     const cancelledSnapshot = await getDocs(cancelledQuery);
-
     cancelledSnapshot.forEach((doc) => {
       const data = doc.data();
       const timestamp = data.cancelledAt || data.joinedAt;
@@ -316,29 +322,20 @@ export async function getFullHistory() {
         history.push({ id: doc.id, ...data, type: "queue" });
       }
     });
-  } catch (error) {
-    console.error("Error fetching cancelled clients:", error);
-  }
 
-  try {
-    // Pegar agendamentos cancelados
-    const appointmentsQuery = query(
-      appointmentsCollection,
-      where("status", "==", "cancelled")
-    );
-    const appointmentsSnapshot = await getDocs(appointmentsQuery);
-
-    appointmentsSnapshot.forEach((doc) => {
+    const appsQuery = query(appointments, where("status", "==", "cancelled"));
+    const appsSnapshot = await getDocs(appsQuery);
+    appsSnapshot.forEach((doc) => {
       const data = doc.data();
       if (data.cancelledAt && data.cancelledAt >= startTimestamp) {
         history.push({ id: doc.id, ...data, type: "appointment" });
       }
     });
+
   } catch (error) {
-    console.error("Error fetching cancelled appointments:", error);
+    console.error("Error fetching history:", error);
   }
 
-  // Ordenar do mais recente para o mais antigo
   history.sort((a, b) => {
     const timeA = a.completedAt || a.cancelledAt || a.joinedAt;
     const timeB = b.completedAt || b.cancelledAt || b.joinedAt;
@@ -349,7 +346,10 @@ export async function getFullHistory() {
 }
 
 // 📊 ESTATÍSTICAS DO DASHBOARD
-export async function getDashboardStats() {
+export async function getDashboardStats(userId) {
+  if (!userId) return null;
+  const { queue } = getCollections(userId);
+
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -363,21 +363,17 @@ export async function getDashboardStats() {
   startOfWeek.setHours(0, 0, 0, 0);
 
   try {
-    // Buscar atendimentos finalizados nos últimos 30 dias
-    // Nota: Em produção, idealmente usaria um índice composto (status + completedAt)
-    // Aqui vamos buscar todos os 'done' e filtrar na memória para simplificar sem índices complexos
-    const q = query(queueCollection, where("status", "==", "done"));
+    const q = query(queue, where("status", "==", "done"));
     const snapshot = await getDocs(q);
 
     const stats = {
       today: { revenue: 0, clients: 0 },
       week: { revenue: 0, clients: 0 },
       month: { revenue: 0, clients: 0 },
-      services: {}, // { "Corte": { count: 10, revenue: 500 } }
-      dailyRevenue: {}, // { "2023-10-25": 150 }
+      services: {},
+      dailyRevenue: {},
     };
 
-    // Inicializar últimos 7 dias com 0
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
@@ -391,32 +387,25 @@ export async function getDashboardStats() {
       const price = parseFloat(data.servicePrice) || 0;
       const serviceName = data.serviceName || "Outros";
 
-      // Ignorar se for muito antigo (mais de 30 dias)
       if (completedAt < thirtyDaysAgo.getTime()) return;
 
-      // Stats Mensais (30 dias)
       stats.month.revenue += price;
       stats.month.clients += 1;
 
-      // Stats Semanais (7 dias)
       if (completedAt >= startOfWeek.getTime()) {
         stats.week.revenue += price;
         stats.week.clients += 1;
-
-        // Gráfico Diário
         const dateStr = new Date(completedAt).toLocaleDateString('pt-BR');
         if (stats.dailyRevenue[dateStr] !== undefined) {
           stats.dailyRevenue[dateStr] += price;
         }
       }
 
-      // Stats Diários (Hoje)
       if (completedAt >= startOfDay.getTime()) {
         stats.today.revenue += price;
         stats.today.clients += 1;
       }
 
-      // Top Serviços (Considerando os 30 dias)
       if (!stats.services[serviceName]) {
         stats.services[serviceName] = { count: 0, revenue: 0 };
       }

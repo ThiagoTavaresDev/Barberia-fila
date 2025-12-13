@@ -3,19 +3,20 @@ import {
     setDoc,
     getDoc,
     onSnapshot,
-    updateDoc,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
 
-const barberStatusDoc = doc(db, "queue", "barber_status_config");
+const getStatusDoc = (userId) => {
+    if (!userId) throw new Error("UserId is required");
+    return doc(db, "users", userId, "queue", "barber_status_config");
+};
 
 /**
  * Define o status do barbeiro
- * @param {string} status - "available" ou "on_break"
- * @param {number} duration - Duração da pausa em minutos (opcional)
  */
-export async function setBarberStatus(status, duration = null) {
+export async function setBarberStatus(userId, status, duration = null) {
+    const statusDoc = getStatusDoc(userId);
     const data = {
         status,
         updatedAt: Date.now(),
@@ -23,13 +24,11 @@ export async function setBarberStatus(status, duration = null) {
 
     if (status === "on_break") {
         if (duration) {
-            // Pausa determinada
             data.breakStartedAt = Date.now();
             data.breakDuration = duration;
             data.breakEndsAt = Date.now() + duration * 60 * 1000;
         } else {
-            // Pausa indeterminada
-            data.breakStartedAt = Date.now(); // Marca quando começou
+            data.breakStartedAt = Date.now();
             data.breakDuration = null;
             data.breakEndsAt = null;
         }
@@ -39,18 +38,19 @@ export async function setBarberStatus(status, duration = null) {
         data.breakEndsAt = null;
     }
 
-    await setDoc(barberStatusDoc, data, { merge: true });
+    await setDoc(statusDoc, data, { merge: true });
 }
 
 /**
  * Obtém o status atual do barbeiro
  */
-export async function getBarberStatus() {
-    const snapshot = await getDoc(barberStatusDoc);
+export async function getBarberStatus(userId) {
+    if (!userId) return { status: 'available' };
+    const statusDoc = getStatusDoc(userId);
+    const snapshot = await getDoc(statusDoc);
     if (snapshot.exists()) {
         return snapshot.data();
     }
-    // Status padrão se não existir
     return {
         status: "available",
         breakStartedAt: null,
@@ -61,23 +61,23 @@ export async function getBarberStatus() {
 }
 
 /**
- * Listener em tempo real para mudanças no status do barbeiro
- * @param {function} callback - Função chamada quando o status muda
+ * Listener em tempo real
  */
-export function listenBarberStatus(callback) {
-    return onSnapshot(barberStatusDoc, (snapshot) => {
+export function listenBarberStatus(userId, callback) {
+    if (!userId) return () => { };
+    const statusDoc = getStatusDoc(userId);
+
+    return onSnapshot(statusDoc, (snapshot) => {
         if (snapshot.exists()) {
             callback(snapshot.data());
         } else {
-            // Criar documento inicial se não existir
-            setBarberStatus("available").then(() => {
-                callback({
-                    status: "available",
-                    breakStartedAt: null,
-                    breakDuration: null,
-                    breakEndsAt: null,
-                    updatedAt: Date.now(),
-                });
+            // First time access might not have doc, return available
+            callback({
+                status: "available",
+                breakStartedAt: null,
+                breakDuration: null,
+                breakEndsAt: null,
+                updatedAt: Date.now(),
             });
         }
     });
@@ -86,23 +86,6 @@ export function listenBarberStatus(callback) {
 /**
  * Finaliza a pausa manualmente
  */
-export async function endBreak() {
-    await setBarberStatus("available");
-}
-
-/**
- * Verifica se a pausa expirou e atualiza automaticamente
- */
-export async function checkAndUpdateBreakStatus() {
-    const status = await getBarberStatus();
-
-    if (status.status === "on_break" && status.breakEndsAt) {
-        const now = Date.now();
-        if (now >= status.breakEndsAt) {
-            await setBarberStatus("available");
-            return true; // Pausa foi finalizada automaticamente
-        }
-    }
-
-    return false;
+export async function endBreak(userId) {
+    await setBarberStatus(userId, "available");
 }

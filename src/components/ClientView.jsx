@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Scissors, Users, Clock, Bell, Instagram, Star, Coffee } from "lucide-react";
+import { Scissors, Users, Clock, Bell, Instagram, Star } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   getClientPosition,
@@ -12,7 +12,7 @@ import { submitRating } from "../services/queueService";
 import { listenBarberStatus } from "../services/barberStatus";
 import tadaSound from "../sounds/ta-da.mp3";
 
-export default function ClientView({ queue, clientId, onBack }) {
+export default function ClientView({ queue, clientId, barberId }) {
   const [notificationPermission, setNotificationPermission] = useState(
     Notification.permission === "granted"
   );
@@ -31,9 +31,10 @@ export default function ClientView({ queue, clientId, onBack }) {
   const [barberStatus, setBarberStatus] = useState({ status: 'available' });
 
   useEffect(() => {
-    const unsubscribe = listenBarberStatus(setBarberStatus);
+    if (!barberId) return;
+    const unsubscribe = listenBarberStatus(barberId, setBarberStatus);
     return () => unsubscribe();
-  }, []);
+  }, [barberId]);
 
   // Calcular tempo estimado de espera (soma dos serviços anteriores)
   let estimatedWaitMinutes = calculateEstimatedWait(queue, clientIndex);
@@ -95,7 +96,7 @@ export default function ClientView({ queue, clientId, onBack }) {
         };
         frame();
 
-        // Som (Corneta)
+        // Som
         const audio = new Audio(tadaSound);
         audio.volume = 0.5;
         audio.play().catch((e) => console.log("Audio play failed (user interaction needed first):", e));
@@ -113,8 +114,6 @@ export default function ClientView({ queue, clientId, onBack }) {
 
       if (granted) {
         sendNotification("Notificações Ativadas", "Você será avisado quando chegar sua vez!");
-
-        // Tocar som para testar e desbloquear o áudio do navegador
         try {
           const audio = new Audio(tadaSound);
           audio.volume = 0.5;
@@ -137,7 +136,7 @@ export default function ClientView({ queue, clientId, onBack }) {
 
     setIsSubmittingRating(true);
     try {
-      await submitRating(clientId, rating);
+      await submitRating(barberId, clientId, rating);
       setHasRated(true);
     } catch (error) {
       console.error("Error submitting rating:", error);
@@ -147,9 +146,8 @@ export default function ClientView({ queue, clientId, onBack }) {
     }
   };
 
-  // Cliente não está na fila (removido ou finalizado)
+  // Cliente não está na fila
   if (!clientId || position === 0) {
-    // Se o cliente ainda não avaliou, mostrar interface de avaliação
     if (!hasRated && client && client.status === "done" && !client.rating) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
@@ -208,7 +206,6 @@ export default function ClientView({ queue, clientId, onBack }) {
       );
     }
 
-    // Já avaliou ou não precisa avaliar
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
@@ -243,7 +240,7 @@ export default function ClientView({ queue, clientId, onBack }) {
     );
   }
 
-  // Se o barbeiro estiver em pausa indeterminada, mostrar overlay
+  // Se o barbeiro estiver em pausa indeterminada
   if (barberStatus.status === 'on_break' && !barberStatus.breakEndsAt) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
@@ -281,10 +278,7 @@ export default function ClientView({ queue, clientId, onBack }) {
               : "bg-gradient-to-r from-amber-600 to-amber-500"
               }`}
           >
-            <div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent 
-                animate-shimmer"
-            ></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
 
             <p className="text-amber-100 text-sm uppercase tracking-wide mb-2 relative z-10">
               Sua posição na fila

@@ -1,54 +1,86 @@
 import React, { useState, useEffect } from "react";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import BarberView from "./components/BarberView";
 import ClientView from "./components/ClientView";
 import CheckInView from "./components/CheckInView";
+import LoginView from "./components/LoginView";
+import RegisterView from "./components/RegisterView";
 import { listenQueue } from "./services/queueService";
 
-export default function App() {
+function AppContent() {
+  const { user, isAuthenticated } = useAuth();
   const [queue, setQueue] = useState([]);
-  const [clientId, setClientId] = useState(null);
-  const [isBarber, setIsBarber] = useState(false);
-  const [isCheckIn, setIsCheckIn] = useState(false);
 
-  // Atualização em tempo real do Firestore
-  useEffect(() => {
-    const unsubscribe = listenQueue(setQueue);
-    return () => unsubscribe();
-  }, []);
+  // State for routing logic
+  const [route, setRoute] = useState({
+    isBarber: false,
+    isCheckIn: false,
+    isClient: false,
+    isRegister: false, // New route
+    paramId: null, // clientId or just placeholder
+    barberId: null // barberId from URL
+  });
 
-  // Detecta URL
+  // Detect URL parameters and path
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const clientParam = params.get("client");
+    const barberParam = params.get("barber");
+    const path = window.location.pathname;
 
-    if (window.location.pathname.includes("/barber")) {
-      setIsBarber(true);
-    } else if (window.location.pathname.includes("/checkin")) {
-      setIsCheckIn(true);
+    if (path === "/checkin") {
+      setRoute({ isCheckIn: true, barberId: barberParam });
+    } else if (path === "/register") {
+      setRoute({ isRegister: true });
+    } else if (path === "/login") {
+      // Explicit login route
+      setRoute({ isBarber: true });
     } else if (clientParam) {
-      setClientId(clientParam);
+      setRoute({ isClient: true, paramId: clientParam, barberId: barberParam });
+    } else {
+      // Default to barber view (will require login)
+      setRoute({ isBarber: true });
     }
   }, []);
 
-  // Painel do barbeiro
-  if (isBarber) {
-    return <BarberView queue={queue} />;
+  // Listen to queue ONLY if we have a target barber (logged in user OR url param)
+  useEffect(() => {
+    const targetId = user?.id || route.barberId;
+
+    if (targetId) {
+      const unsubscribe = listenQueue(targetId, setQueue);
+      return () => unsubscribe();
+    }
+  }, [user, route.barberId]);
+
+  if (route.isRegister) {
+    if (isAuthenticated) {
+      // Redirect to home if already logged in (simple client-side redirect)
+      window.history.pushState({}, "", "/");
+      return <BarberView />;
+    }
+    return <RegisterView />;
   }
 
-  // Tela de Check-in (Auto-atendimento)
-  if (isCheckIn) {
-    return <CheckInView />;
+  if (route.isCheckIn) {
+    return <CheckInView barberId={route.barberId} />;
   }
 
-  // Tela do cliente
-  if (clientId) {
-    return <ClientView queue={queue} clientId={clientId} />;
+  if (route.isClient && route.paramId) {
+    return <ClientView queue={queue} clientId={route.paramId} barberId={route.barberId} />;
   }
 
-  // URL inválida
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
+  return <BarberView />;
+}
+
+export default function App() {
   return (
-    <div className="min-h-screen flex justify-center items-center bg-black text-white">
-      <p>URL inválida.</p>
-    </div>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

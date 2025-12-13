@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { User, Phone, Briefcase, Scissors } from "lucide-react";
 import { addClient, listenServices } from "../services/queueService";
-import { generateWhatsAppMessage, generateWhatsAppLink } from "../utils/helpers";
 
-export default function CheckInView() {
+export default function CheckInView({ barberId }) {
     const [services, setServices] = useState([]);
     const [newClient, setNewClient] = useState({
         name: "",
@@ -13,9 +12,10 @@ export default function CheckInView() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const unsubscribe = listenServices(setServices);
+        if (!barberId) return;
+        const unsubscribe = listenServices(barberId, setServices);
         return () => unsubscribe();
-    }, []);
+    }, [barberId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -36,10 +36,10 @@ export default function CheckInView() {
                 servicePrice: selectedService.price,
             };
 
-            const { id } = await addClient(clientData);
+            const { id } = await addClient(barberId, clientData);
 
-            // Redirecionar para a tela de acompanhamento
-            window.location.href = `/?client=${id}`;
+            // Redirecionar para a tela de acompanhamento com o barberId correto
+            window.location.href = `/?client=${id}&barber=${barberId}`;
 
         } catch (error) {
             console.error("Erro ao fazer check-in:", error);
@@ -48,6 +48,8 @@ export default function CheckInView() {
             setLoading(false);
         }
     };
+
+    if (!barberId) return <div className="text-white">Carregando...</div>;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">

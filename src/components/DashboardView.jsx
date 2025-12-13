@@ -1,21 +1,21 @@
-import React, { useEffect, useState } from "react";
-import { DollarSign, TrendingUp, Users, Calendar, BarChart3 } from "lucide-react";
+import React, { useEffect, useState, useCallback } from "react";
+import { DollarSign, TrendingUp, Calendar, BarChart3 } from "lucide-react"; // Removed 'Users' unused import
 import { getDashboardStats } from "../services/queueService";
 
-export default function DashboardView() {
+export default function DashboardView({ userId }) {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        loadStats();
-    }, []);
-
-    const loadStats = async () => {
+    const loadStats = useCallback(async () => {
         setLoading(true);
-        const data = await getDashboardStats();
+        const data = await getDashboardStats(userId);
         setStats(data);
         setLoading(false);
-    };
+    }, [userId]);
+
+    useEffect(() => {
+        if (userId) loadStats();
+    }, [userId, loadStats]);
 
     if (loading) {
         return (
