@@ -5,7 +5,7 @@ import {
     signOut,
     createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const AuthContext = createContext({});
@@ -53,6 +53,15 @@ export function AuthProvider({ children }) {
         return result;
     };
 
+    const updateProfile = async (updates) => {
+        if (!user) return;
+
+        await updateDoc(doc(db, "users", user.id), updates);
+
+        // Atualizar estado local
+        setUser(prev => ({ ...prev, ...updates }));
+    };
+
     const logout = () => {
         return signOut(auth);
     };
@@ -61,6 +70,7 @@ export function AuthProvider({ children }) {
         user,
         login,
         signup,
+        updateProfile,
         logout,
         isAuthenticated: !!user
     };

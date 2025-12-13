@@ -11,6 +11,8 @@ import {
 import { submitRating } from "../services/queueService";
 import { listenBarberStatus } from "../services/barberStatus";
 import tadaSound from "../sounds/ta-da.mp3";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase";
 
 export default function ClientView({ queue, clientId, barberId }) {
   const [notificationPermission, setNotificationPermission] = useState(
@@ -29,10 +31,30 @@ export default function ClientView({ queue, clientId, barberId }) {
 
   // Estado do status do barbeiro
   const [barberStatus, setBarberStatus] = useState({ status: 'available' });
+  const [instagramLink, setInstagramLink] = useState("");
 
   useEffect(() => {
     if (!barberId) return;
     const unsubscribe = listenBarberStatus(barberId, setBarberStatus);
+
+    // Buscar perfil do barbeiro
+    const fetchBarberProfile = async () => {
+      try {
+        const docRef = doc(db, "users", barberId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setInstagramLink(data.instagramLink || "");
+          if (data.shopName) {
+            document.title = data.shopName;
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching barber profile:", error);
+      }
+    };
+    fetchBarberProfile();
+
     return () => unsubscribe();
   }, [barberId]);
 
@@ -190,17 +212,19 @@ export default function ClientView({ queue, clientId, barberId }) {
               {isSubmittingRating ? "Enviando..." : "Enviar Avaliação"}
             </button>
 
-            <div className="pt-4">
-              <a
-                href="https://www.instagram.com/diniz_barbershoper/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
-              >
-                <Instagram className="w-6 h-6" />
-                <span>Siga nosso Instagram</span>
-              </a>
-            </div>
+            {instagramLink && (
+              <div className="pt-4">
+                <a
+                  href={instagramLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+                >
+                  <Instagram className="w-6 h-6" />
+                  <span>Siga nosso Instagram</span>
+                </a>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -224,17 +248,19 @@ export default function ClientView({ queue, clientId, barberId }) {
             }
           </p>
 
-          <div className="pt-4">
-            <a
-              href="https://www.instagram.com/diniz_barbershoper/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
-            >
-              <Instagram className="w-6 h-6" />
-              <span>Siga nosso Instagram</span>
-            </a>
-          </div>
+          {instagramLink && (
+            <div className="pt-4">
+              <a
+                href={instagramLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              >
+                <Instagram className="w-6 h-6" />
+                <span>Siga nosso Instagram</span>
+              </a>
+            </div>
+          )}
         </div>
       </div>
     );

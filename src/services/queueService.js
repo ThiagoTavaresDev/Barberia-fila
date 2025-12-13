@@ -120,7 +120,7 @@ export async function moveClient(userId, client, direction, queueList) {
 }
 
 // Finalizar atendimento
-export async function completeFirst(userId, queueList) {
+export async function completeFirst(userId, queueList, paymentMethod = 'money') {
   if (queueList.length === 0) return;
 
   const first = queueList[0];
@@ -128,6 +128,7 @@ export async function completeFirst(userId, queueList) {
   await updateDoc(doc(db, "users", userId, "queue", first.id), {
     status: "done",
     completedAt: Date.now(),
+    paymentMethod, // Salvar método de pagamento
   });
 }
 
@@ -211,21 +212,36 @@ export async function submitRating(userId, clientId, rating) {
 // 📅 GERENCIAMENTO DE AGENDAMENTOS
 
 // Adicionar agendamento
+// Adicionar agendamento (com suporte a recorrência)
 export async function addAppointment(userId, appointmentData) {
   const { appointments } = getCollections(userId);
-  const docRef = await addDoc(appointments, {
-    name: appointmentData.name,
-    phone: appointmentData.phone || "",
-    scheduledDate: appointmentData.scheduledDate,
-    scheduledTime: appointmentData.scheduledTime,
-    serviceName: appointmentData.serviceName || "",
-    serviceDuration: parseInt(appointmentData.serviceDuration) || 0,
-    servicePrice: parseFloat(appointmentData.servicePrice) || 0,
-    status: "scheduled",
-    createdAt: Date.now(),
-  });
+  const recurrenceCount = appointmentData.recurrenceCount || 1;
+  const ids = [];
 
-  return { id: docRef.id };
+  // Data base do agendamento
+  const [year, month, day] = new Date(appointmentData.scheduledDate).toISOString().split('T')[0].split('-');
+  const baseDate = new Date(year, month - 1, day); // Mês 0-indexado
+
+  for (let i = 0; i < recurrenceCount; i++) {
+    const nextDate = new Date(baseDate);
+    nextDate.setDate(baseDate.getDate() + (i * 7)); // Adiciona 7 dias a cada iteração
+
+    const docRef = await addDoc(appointments, {
+      name: appointmentData.name,
+      phone: appointmentData.phone || "",
+      scheduledDate: nextDate.getTime(),
+      scheduledTime: appointmentData.scheduledTime,
+      serviceName: appointmentData.serviceName || "",
+      serviceDuration: parseInt(appointmentData.serviceDuration) || 0,
+      servicePrice: parseFloat(appointmentData.servicePrice) || 0,
+      status: "scheduled",
+      createdAt: Date.now(),
+      recurrenceGroup: i > 0 ? true : false // Marcador interno opcional
+    });
+    ids.push(docRef.id);
+  }
+
+  return { id: ids[0] };
 }
 
 // Listener de agendamentos
@@ -366,14 +382,19 @@ export async function getDashboardStats(userId) {
     const q = query(queue, where("status", "==", "done"));
     const snapshot = await getDocs(q);
 
+    // 1. Initial Setup
     const stats = {
       today: { revenue: 0, clients: 0 },
       week: { revenue: 0, clients: 0 },
       month: { revenue: 0, clients: 0 },
+      lastMonth: { revenue: 0, clients: 0 }, // For comparison
+      loyalty: { new: 0, recurring: 0 }, // For loyalty analysis
       services: {},
       dailyRevenue: {},
+      paymentMethods: {}
     };
 
+    // Dates for formatting
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
@@ -381,36 +402,75 @@ export async function getDashboardStats(userId) {
       stats.dailyRevenue[dateStr] = 0;
     }
 
-    snapshot.forEach((doc) => {
-      const data = doc.data();
+    // 2. Client History Map to determine New vs Recurring
+    const clientHistory = new Map();
+
+    // We need to iterate chronologically to determine "New" status correctly
+    const allDocs = [];
+    snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
+    allDocs.sort((a, b) => (a.completedAt || a.joinedAt) - (b.completedAt || b.joinedAt));
+
+    allDocs.forEach((data) => {
       const completedAt = data.completedAt || data.joinedAt;
       const price = parseFloat(data.servicePrice) || 0;
       const serviceName = data.serviceName || "Outros";
+      const phone = data.phone;
 
-      if (completedAt < thirtyDaysAgo.getTime()) return;
-
-      stats.month.revenue += price;
-      stats.month.clients += 1;
-
-      if (completedAt >= startOfWeek.getTime()) {
-        stats.week.revenue += price;
-        stats.week.clients += 1;
-        const dateStr = new Date(completedAt).toLocaleDateString('pt-BR');
-        if (stats.dailyRevenue[dateStr] !== undefined) {
-          stats.dailyRevenue[dateStr] += price;
+      // Determine if client is new or recurring at the time of this service
+      let isRecurring = false;
+      if (phone) {
+        if (clientHistory.has(phone)) {
+          isRecurring = true;
+        } else {
+          clientHistory.set(phone, completedAt);
         }
       }
 
-      if (completedAt >= startOfDay.getTime()) {
-        stats.today.revenue += price;
-        stats.today.clients += 1;
-      }
+      // --- Current Month Analysis (Last 30 Days) ---
+      if (completedAt >= thirtyDaysAgo.getTime()) {
+        stats.month.revenue += price;
+        stats.month.clients += 1;
 
-      if (!stats.services[serviceName]) {
-        stats.services[serviceName] = { count: 0, revenue: 0 };
+        // Loyalty Logic (Only for current month)
+        if (isRecurring) {
+          stats.loyalty.recurring += 1;
+        } else {
+          stats.loyalty.new += 1;
+        }
+
+        // Services
+        if (!stats.services[serviceName]) {
+          stats.services[serviceName] = { count: 0, revenue: 0 };
+        }
+        stats.services[serviceName].count += 1;
+        stats.services[serviceName].revenue += price;
+
+        // Payment Methods (Month)
+        const method = data.paymentMethod || 'money';
+        if (!stats.paymentMethods[method]) stats.paymentMethods[method] = 0;
+        stats.paymentMethods[method] += 1;
+
+        // Week Analysis
+        if (completedAt >= startOfWeek.getTime()) {
+          stats.week.revenue += price;
+          stats.week.clients += 1;
+          const dateStr = new Date(completedAt).toLocaleDateString('pt-BR');
+          if (stats.dailyRevenue[dateStr] !== undefined) {
+            stats.dailyRevenue[dateStr] += price;
+          }
+        }
+
+        // Today Analysis
+        if (completedAt >= startOfDay.getTime()) {
+          stats.today.revenue += price;
+          stats.today.clients += 1;
+        }
       }
-      stats.services[serviceName].count += 1;
-      stats.services[serviceName].revenue += price;
+      // --- Previous Month Analysis (30-60 Days Ago) ---
+      else if (completedAt >= (thirtyDaysAgo.getTime() - (30 * 24 * 60 * 60 * 1000))) {
+        stats.lastMonth.revenue += price;
+        stats.lastMonth.clients += 1;
+      }
     });
 
     return stats;

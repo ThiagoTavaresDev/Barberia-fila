@@ -25,6 +25,8 @@ import AppointmentModal from "./modals/AppointmentModal";
 import EditClientModal from "./modals/EditClientModal";
 import QrModal from "./modals/QrModal";
 import BreakModal from "./modals/BreakModal";
+import { ProfileModal } from "./modals/ProfileModal";
+import FinishServiceModal from "./modals/FinishServiceModal";
 
 export default function BarberView() {
   const { user, logout } = useAuth();
@@ -44,6 +46,10 @@ export default function BarberView() {
   const [showUndo, setShowUndo] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showBreakModal, setShowBreakModal] = useState(false);
+
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [clientToFinish, setClientToFinish] = useState(null);
 
   // Estados para Status do Barbeiro
   const [barberStatus, setLocalBarberStatus] = useState({ status: 'available' });
@@ -71,7 +77,9 @@ export default function BarberView() {
     phone: "",
     date: "",
     time: "",
+    time: "",
     serviceId: "",
+    recurrenceCount: 1, // Default 1 (just once)
   });
 
   useEffect(() => {
@@ -132,6 +140,12 @@ export default function BarberView() {
       setHistory(fullHistory);
     }
   }, [userId]);
+
+  useEffect(() => {
+    if (user?.shopName) {
+      document.title = `${user.shopName} - Painel`;
+    }
+  }, [user]);
 
   useEffect(() => {
     if (currentView === "history") {
@@ -207,13 +221,19 @@ export default function BarberView() {
       return;
     }
 
-    if (window.confirm(`Finalizar atendimento de ${queue[0].name}?`)) {
-      const clientToComplete = queue[0];
-      await completeFirst(userId, queue);
-      setLastCompletedClient(clientToComplete);
-      setShowUndo(true);
-      setTimeout(() => setShowUndo(false), 10000);
-    }
+    const clientToComplete = queue[0];
+    setClientToFinish(clientToComplete);
+    setShowFinishModal(true);
+  };
+
+  const handleConfirmFinish = async (paymentMethod) => {
+    if (!clientToFinish) return;
+
+    await completeFirst(userId, queue, paymentMethod);
+    setLastCompletedClient(clientToFinish);
+    setShowUndo(true);
+    setClientToFinish(null);
+    setTimeout(() => setShowUndo(false), 10000);
   };
 
   const handleUndo = async () => {
@@ -301,11 +321,12 @@ export default function BarberView() {
         serviceName: selectedService?.name || "",
         serviceDuration: selectedService?.duration || 0,
         servicePrice: selectedService?.price || 0,
+        recurrenceCount: parseInt(newAppointment.recurrenceCount) || 1,
       };
 
       await addAppointment(userId, appointmentData);
 
-      setNewAppointment({ name: "", phone: "", date: "", time: "", serviceId: "" });
+      setNewAppointment({ name: "", phone: "", date: "", time: "", serviceId: "", recurrenceCount: 1 });
       setShowAppointmentModal(false);
       alert("Agendamento criado com sucesso!");
     } catch (error) {
@@ -354,6 +375,9 @@ export default function BarberView() {
               </button>
               <button onClick={() => setShowBreakModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
                 <Coffee className="w-4 h-4" /> Pausa
+              </button>
+              <button onClick={() => setShowProfileModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
+                <User className="w-4 h-4" /> Perfil
               </button>
               <button onClick={() => setShowServiceModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
                 <Settings className="w-4 h-4" /> Serviços
@@ -579,7 +603,7 @@ export default function BarberView() {
         )}
 
         {/* DASHBOARD VIEW */}
-        {currentView === "dashboard" && <DashboardView userId={userId} />}
+        {currentView === "dashboard" && <DashboardView userId={userId} user={user} />}
 
       </div>
 
@@ -593,6 +617,15 @@ export default function BarberView() {
       <QrModal show={showQrModal} onClose={() => setShowQrModal(false)} checkInUrl={`${window.location.origin}/checkin?barber=${userId}`} />
 
       <BreakModal show={showBreakModal} onClose={() => setShowBreakModal(false)} barberStatus={barberStatus} breakTimeRemaining={breakTimeRemaining} userId={userId} />
+
+      <ProfileModal show={showProfileModal} onClose={() => setShowProfileModal(false)} />
+
+      <FinishServiceModal
+        show={showFinishModal}
+        onClose={() => setShowFinishModal(false)}
+        client={clientToFinish}
+        onConfirm={handleConfirmFinish}
+      />
 
       {/* Undo Button */}
       {showUndo && (

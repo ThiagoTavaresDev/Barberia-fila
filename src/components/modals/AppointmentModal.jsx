@@ -78,6 +78,40 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
                         </select>
                     </div>
 
+                    <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+                        <label className="flex items-center cursor-pointer group">
+                            <div className="relative">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={newAppointment.recurrenceCount > 1}
+                                    onChange={(e) => setNewAppointment({ ...newAppointment, recurrenceCount: e.target.checked ? 4 : 1 })}
+                                />
+                                <div className="w-10 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                            </div>
+                            <span className="ml-3 text-white font-medium group-hover:text-amber-500 transition-colors">Repetir semanalmente?</span>
+                        </label>
+
+                        {newAppointment.recurrenceCount > 1 && (
+                            <div className="mt-3 animate-fade-in">
+                                <label className="block text-gray-400 text-sm mb-1">Por quantas semanas?</label>
+                                <select
+                                    value={newAppointment.recurrenceCount}
+                                    onChange={(e) => setNewAppointment({ ...newAppointment, recurrenceCount: parseInt(e.target.value) })}
+                                    className="w-full px-3 py-2 bg-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                >
+                                    <option value="2">2 semanas</option>
+                                    <option value="4">4 semanas (1 mês)</option>
+                                    <option value="8">8 semanas (2 meses)</option>
+                                    <option value="12">12 semanas (3 meses)</option>
+                                </select>
+                                <p className="text-xs text-gray-400 mt-2">
+                                    Serão criados agendamentos para o mesmo dia e horário nas próximas semanas.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
                     <button
                         onClick={handleAddAppointment}
                         className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition-colors"
