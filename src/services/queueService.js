@@ -671,11 +671,6 @@ export async function getDashboardStats(userId) {
       revenueWeekDays: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
       expensesByCategory: expensesBreakdown,
       revenueByLoyalty: { new: 0, recurring: 0 },
-      paymentMethods: {},
-      revenueByPaymentMethod: { pix: 0, money: 0, card: 0 },
-      revenueWeekDays: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
-      expensesByCategory: {},
-      revenueByLoyalty: { new: 0, recurring: 0 },
       heatmap: {} // { 0: { 8: 0...}, ... }
     };
 
