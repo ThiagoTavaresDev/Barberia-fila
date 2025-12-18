@@ -61,30 +61,37 @@ export default function ClientView({ queue, clientId, barberId }) {
       setIsVerifying(true);
       const verifyStatus = async () => {
         try {
+          console.log(`Verifying status for client ${clientId} on barber ${barberId}...`);
           const docRef = doc(db, "users", barberId, "queue", clientId);
           const snap = await getDoc(docRef);
+
           if (snap.exists()) {
             const data = snap.data();
-            // If still waiting, keep verifying (loading) until queue listener catches up
-            // BUT, show the user confirmed status immediately
+            console.log("Client found directly:", data);
+
             if (data.status === 'waiting') {
-              console.log("Client exists and waiting, waiting for queue sync...");
               setTempClient({ id: snap.id, ...data });
-              setIsVerifying(false); // Stop spinner, show temp view
+              setIsVerifying(false);
               return;
             }
+          } else {
+            console.warn("Client document not found directly.");
           }
-          // If done, cancelled, or doesn't exist, stop verifying and show Finished/Home
+
           setIsVerifying(false);
           setTempClient(null);
         } catch (error) {
           console.error("Verification error:", error);
+          // If permission error, it means Rules are wrong or blocked
+          if (error.code === 'permission-denied') {
+            alert("Erro de permissão: As regras do Firebase podem não estar publicadas. Verifique o console.");
+          }
           setIsVerifying(false);
         }
       };
       verifyStatus();
     }
-  }, [clientId, queue, barberId, tempClient]); // Changed dependency from 'client' to 'queue'/'tempClient'
+  }, [clientId, queue, barberId, tempClient]);
 
   useEffect(() => {
     if (!barberId) return;
