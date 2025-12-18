@@ -47,15 +47,17 @@ export default function ClientView({ queue, clientId, barberId }) {
 
 
   useEffect(() => {
-    // If client is found in queue, we are good.
-    if (client) {
+    const clientInQueue = queue.find(c => c.id === clientId);
+
+    // If client is found in REAL queue, we are good.
+    if (clientInQueue) {
       setIsVerifying(false);
       setTempClient(null);
       return;
     }
 
-    // If we have an ID but not in queue, check server
-    if (clientId && !client) {
+    // If we have an ID but not in queue, and haven't verified yet (or lost tempClient)
+    if (clientId && !clientInQueue && !tempClient) {
       setIsVerifying(true);
       const verifyStatus = async () => {
         try {
@@ -82,7 +84,7 @@ export default function ClientView({ queue, clientId, barberId }) {
       };
       verifyStatus();
     }
-  }, [clientId, client, barberId]);
+  }, [clientId, queue, barberId, tempClient]); // Changed dependency from 'client' to 'queue'/'tempClient'
 
   useEffect(() => {
     if (!barberId) return;
@@ -219,8 +221,9 @@ export default function ClientView({ queue, clientId, barberId }) {
     }
   };
 
-  // Cliente não está na fila
-  if (!clientId || position === 0) {
+  // Cliente não está na fila (e não está esperando sincronização)
+  // Se tiver tempClient (status waiting), DEIXA PASSAR para exibir o painel
+  if (!clientId || (position === 0 && (!client || client.status !== 'waiting'))) {
     if (isVerifying) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
