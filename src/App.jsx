@@ -45,10 +45,16 @@ function AppContent() {
 
   // Listen to queue ONLY if we have a target barber (logged in user OR url param)
   useEffect(() => {
-    const targetId = user?.id || route.barberId;
+    // If user is logged in, use their ID.
+    // If not, but we have a barberId from the Route (scanned QR / Link), use that.
+    const targetId = user?.uid || user?.id || route.barberId;
 
     if (targetId) {
-      const unsubscribe = listenQueue(targetId, setQueue);
+      console.log("Listening to queue for:", targetId);
+      const unsubscribe = listenQueue(targetId, (newQueue) => {
+        console.log("Queue updated, count:", newQueue.length);
+        setQueue(newQueue);
+      });
       return () => unsubscribe();
     }
   }, [user, route.barberId]);
