@@ -405,8 +405,8 @@ export function listenQueue(userId, callback) {
   if (!userId) return () => { };
 
   const { queue } = getCollections(userId);
-  // Ordenar por 'order' e depois por 'joinedAt' como fallback
-  const q = query(queue, orderBy("order", "asc"));
+  // Remove orderBy from query to avoid index issues/permission quirks on public access
+  const q = query(queue);
 
   return onSnapshot(q, (snapshot) => {
     const list = [];
@@ -418,15 +418,17 @@ export function listenQueue(userId, callback) {
       }
     });
 
-    // Fallback de ordenação
+    // Client-side sort by order, then joinedAt
     list.sort((a, b) => {
       const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
       const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) return orderA - orderB;
-      return a.joinedAt - b.joinedAt;
+      return (a.joinedAt || 0) - (b.joinedAt || 0);
     });
 
     callback(list);
+  }, (error) => {
+    console.error("Error listening to queue:", error);
   });
 }
 

@@ -26,7 +26,10 @@ export default function ClientView({ queue, clientId, barberId }) {
   const hasCelebratedRef = useRef(false);
 
   const position = clientId ? getClientPosition(queue, clientId) : 0;
-  const client = queue.find((c) => c.id === clientId);
+  // Use queue client if available, otherwise fallback to tempClient (from individual fetch)
+  const client = queue.find((c) => c.id === clientId) || tempClient;
+  // If we are using tempClient, we don't know the index yet, so position is approximate/unknown
+  // getClientPosition handles missing client by returning 0, which is fine for "Waiting..." state
   const clientIndex = queue.findIndex((c) => c.id === clientId);
 
   // Estado do status do barbeiro
@@ -40,10 +43,14 @@ export default function ClientView({ queue, clientId, barberId }) {
     return !!clientId && !queue.find(c => c.id === clientId);
   });
 
+  // Temporary client data while waiting for queue sync
+  const [tempClient, setTempClient] = useState(null);
+
   useEffect(() => {
     // If client is found in queue, we are good.
     if (client) {
       setIsVerifying(false);
+      setTempClient(null);
       return;
     }
 
@@ -57,13 +64,17 @@ export default function ClientView({ queue, clientId, barberId }) {
           if (snap.exists()) {
             const data = snap.data();
             // If still waiting, keep verifying (loading) until queue listener catches up
+            // BUT, show the user confirmed status immediately
             if (data.status === 'waiting') {
               console.log("Client exists and waiting, waiting for queue sync...");
+              setTempClient({ id: snap.id, ...data });
+              setIsVerifying(false); // Stop spinner, show temp view
               return;
             }
           }
           // If done, cancelled, or doesn't exist, stop verifying and show Finished/Home
           setIsVerifying(false);
+          setTempClient(null);
         } catch (error) {
           console.error("Verification error:", error);
           setIsVerifying(false);
@@ -362,8 +373,13 @@ export default function ClientView({ queue, clientId, barberId }) {
             </p>
 
             <p className="text-6xl font-bold text-white relative z-10">
-              {position}º
+              {position > 0 ? `${position}º` : "--"}
             </p>
+            {position === 0 && (
+              <p className="text-xs text-amber-200 mt-2 relative z-10 animate-pulse">
+                Sincronizando fila...
+              </p>
+            )}
           </div>
 
           <div className="space-y-3 text-left">
