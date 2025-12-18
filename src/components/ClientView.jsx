@@ -15,36 +15,36 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default function ClientView({ queue, clientId, barberId }) {
+  // State Definitions (Must be first)
   const [notificationPermission, setNotificationPermission] = useState(
     Notification.permission === "granted"
   );
   const [rating, setRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-
-  // Ref para controlar se o efeito já foi disparado para a posição 1
-  const hasCelebratedRef = useRef(false);
-
-  const position = clientId ? getClientPosition(queue, clientId) : 0;
-  // Use queue client if available, otherwise fallback to tempClient (from individual fetch)
-  const client = queue.find((c) => c.id === clientId) || tempClient;
-  // If we are using tempClient, we don't know the index yet, so position is approximate/unknown
-  // getClientPosition handles missing client by returning 0, which is fine for "Waiting..." state
-  const clientIndex = queue.findIndex((c) => c.id === clientId);
-
-  // Estado do status do barbeiro
   const [barberStatus, setBarberStatus] = useState({ status: 'available' });
   const [instagramLink, setInstagramLink] = useState("");
 
   // Status Verification State (Race Condition Fix)
   const [isVerifying, setIsVerifying] = useState(() => {
     // Initial state: If we have an ID but it's not in the queue, assume we need to verify
-    // This prevents the "Finished" flash on first load
     return !!clientId && !queue.find(c => c.id === clientId);
   });
-
   // Temporary client data while waiting for queue sync
   const [tempClient, setTempClient] = useState(null);
+
+  // Refs
+  const hasCelebratedRef = useRef(false);
+
+  // Derived State (Depends on Props + State)
+  // Use queue client if available, otherwise fallback to tempClient (from individual fetch)
+  const client = queue.find((c) => c.id === clientId) || tempClient;
+  const position = clientId ? getClientPosition(queue, clientId) : 0;
+  // If we are using tempClient, we don't know the index yet, so position is approximate/unknown
+  // getClientPosition handles missing client by returning 0, which is fine for "Waiting..." state
+  const clientIndex = queue.findIndex((c) => c.id === clientId);
+
+
 
   useEffect(() => {
     // If client is found in queue, we are good.
