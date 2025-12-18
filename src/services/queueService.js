@@ -46,17 +46,27 @@ export async function removeService(userId, id) {
 }
 
 // Listener de serviços
-export function listenServices(userId, callback) {
+export function listenServices(userId, callback, onError) {
   if (!userId) return () => { };
   const { services } = getCollections(userId);
-  const q = query(services, orderBy("name"));
+  // Remove orderBy to avoid index issues on new accounts/collections
+  const q = query(services);
 
   return onSnapshot(q, (snapshot) => {
     const list = [];
     snapshot.forEach((doc) => {
       list.push({ id: doc.id, ...doc.data() });
     });
+
+    // Client-side sort
+    list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
     callback(list);
+  }, (error) => {
+    console.error("Error fetching services:", error);
+    // If callback expects a second argument or if we want to handle it, we could.
+    // For now, logging is crucial for debugging the "new account" issue.
+    if (onError) onError(error);
   });
 }
 

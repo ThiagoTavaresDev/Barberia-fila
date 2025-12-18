@@ -4,6 +4,9 @@ import { addClient, listenServices } from "../services/queueService";
 
 export default function CheckInView({ barberId }) {
     const [services, setServices] = useState([]);
+    const [servicesLoading, setServicesLoading] = useState(true);
+    const [servicesError, setServicesError] = useState(null);
+
     const [newClient, setNewClient] = useState({
         name: "",
         phone: "",
@@ -13,7 +16,21 @@ export default function CheckInView({ barberId }) {
 
     useEffect(() => {
         if (!barberId) return;
-        const unsubscribe = listenServices(barberId, setServices);
+        setServicesLoading(true);
+        setServicesError(null);
+
+        const unsubscribe = listenServices(
+            barberId,
+            (list) => {
+                setServices(list);
+                setServicesLoading(false);
+            },
+            (error) => {
+                console.error("Error loading services:", error);
+                setServicesError("Não foi possível carregar os serviços. Tente novamente.");
+                setServicesLoading(false);
+            }
+        );
         return () => unsubscribe();
     }, [barberId]);
 
@@ -101,8 +118,13 @@ export default function CheckInView({ barberId }) {
                                 value={newClient.serviceId}
                                 onChange={(e) => setNewClient({ ...newClient, serviceId: e.target.value })}
                                 className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 appearance-none"
+                                disabled={servicesLoading || !!servicesError}
                             >
-                                <option value="">Selecione um serviço</option>
+                                <option value="">
+                                    {servicesLoading ? "Carregando serviços..." :
+                                        servicesError ? "Erro ao carregar serviços" :
+                                            "Selecione um serviço"}
+                                </option>
                                 {services.map((service) => (
                                     <option key={service.id} value={service.id}>
                                         {service.name} ({service.duration} min - R$ {service.price})
@@ -110,6 +132,12 @@ export default function CheckInView({ barberId }) {
                                 ))}
                             </select>
                         </div>
+                        {servicesError && (
+                            <p className="text-red-400 text-sm mt-1">{servicesError}</p>
+                        )}
+                        {services.length === 0 && !servicesLoading && !servicesError && (
+                            <p className="text-yellow-500 text-sm mt-1">Nenhum serviço disponível no momento.</p>
+                        )}
                     </div>
 
                     <button
