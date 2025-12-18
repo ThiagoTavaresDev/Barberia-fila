@@ -33,6 +33,46 @@ export default function ClientView({ queue, clientId, barberId }) {
   const [barberStatus, setBarberStatus] = useState({ status: 'available' });
   const [instagramLink, setInstagramLink] = useState("");
 
+  // Status Verification State (Race Condition Fix)
+  const [isVerifying, setIsVerifying] = useState(() => {
+    // Initial state: If we have an ID but it's not in the queue, assume we need to verify
+    // This prevents the "Finished" flash on first load
+    return !!clientId && !queue.find(c => c.id === clientId);
+  });
+
+  useEffect(() => {
+    // If client is found in queue, we are good.
+    if (client) {
+      setIsVerifying(false);
+      return;
+    }
+
+    // If we have an ID but not in queue, check server
+    if (clientId && !client) {
+      setIsVerifying(true);
+      const verifyStatus = async () => {
+        try {
+          const docRef = doc(db, "users", barberId, "queue", clientId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            // If still waiting, keep verifying (loading) until queue listener catches up
+            if (data.status === 'waiting') {
+              console.log("Client exists and waiting, waiting for queue sync...");
+              return;
+            }
+          }
+          // If done, cancelled, or doesn't exist, stop verifying and show Finished/Home
+          setIsVerifying(false);
+        } catch (error) {
+          console.error("Verification error:", error);
+          setIsVerifying(false);
+        }
+      };
+      verifyStatus();
+    }
+  }, [clientId, client, barberId]);
+
   useEffect(() => {
     if (!barberId) return;
     const unsubscribe = listenBarberStatus(barberId, setBarberStatus);
@@ -170,6 +210,17 @@ export default function ClientView({ queue, clientId, barberId }) {
 
   // Cliente não está na fila
   if (!clientId || position === 0) {
+    if (isVerifying) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-white">Localizando seu agendamento...</h2>
+          </div>
+        </div>
+      );
+    }
+
     if (!hasRated && client && client.status === "done" && !client.rating) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
