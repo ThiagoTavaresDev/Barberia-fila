@@ -8,17 +8,23 @@ import {
   requestNotificationPermission,
   sendNotification,
 } from "../utils/helpers";
-import { submitRating } from "../services/queueService";
+import { submitRating, listenQueue } from "../services/queueService";
 import { listenBarberStatus } from "../services/barberStatus";
 import tadaSound from "../sounds/ta-da.mp3";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
-export default function ClientView({ queue, clientId, barberId }) {
+export default function ClientView({ queue: propQueue = [], clientId, barberId }) {
   // State Definitions (Must be first)
+  const [localQueue, setLocalQueue] = useState([]);
   const [notificationPermission, setNotificationPermission] = useState(
     Notification.permission === "granted"
   );
+
+  // Use local queue if available (self-fetched), otherwise use props
+  // We prioritize localQueue if it has data, as it means the component successfully connected itself
+  const queue = localQueue.length > 0 ? localQueue : propQueue;
+
   const [rating, setRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
@@ -44,6 +50,20 @@ export default function ClientView({ queue, clientId, barberId }) {
   // getClientPosition handles missing client by returning 0, which is fine for "Waiting..." state
   const clientIndex = queue.findIndex((c) => c.id === clientId);
 
+
+  // QUEUE LISTENER FALLBACK (Self-Healing)
+  // If we have a barberId, ensure we are listening to the queue directly
+  // This solves issues where App.jsx might fail to pass the queue or routing is complex
+  useEffect(() => {
+    if (barberId) {
+      console.log("ClientView: Starting independent queue listener for", barberId);
+      const unsubscribe = listenQueue(barberId, (newQueue) => {
+        console.log("ClientView: Local queue updated", newQueue.length);
+        setLocalQueue(newQueue);
+      });
+      return () => unsubscribe();
+    }
+  }, [barberId]);
 
 
   useEffect(() => {
