@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { User, Phone, Briefcase, Scissors } from "lucide-react";
 import { addClient, listenServices } from "../services/queueService";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase";
 
 export default function CheckInView({ barberId }) {
     const [services, setServices] = useState([]);
@@ -13,6 +15,8 @@ export default function CheckInView({ barberId }) {
         serviceId: "",
     });
     const [loading, setLoading] = useState(false);
+
+    const [shopName, setShopName] = useState("");
 
     useEffect(() => {
         if (!barberId) return;
@@ -31,8 +35,27 @@ export default function CheckInView({ barberId }) {
                 setServicesLoading(false);
             }
         );
+
+        // Buscar nome da barbearia para exibir
+        const fetchBarberProfile = async () => {
+            try {
+                const docRef = doc(db, "users", barberId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setShopName(docSnap.data().shopName || "");
+                }
+            } catch (error) {
+                console.error("Error fetching barber profile:", error);
+            }
+        };
+        fetchBarberProfile();
+
         return () => unsubscribe();
     }, [barberId]);
+
+    // Vou precisar adicionar imports se quiser buscar o nome.
+    // Ou melhor, vou apenas assumir que preciso adicionar a busca.
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -76,7 +99,7 @@ export default function CheckInView({ barberId }) {
                         <Scissors className="w-10 h-10 text-amber-500" />
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">
-                        Entrar na Fila
+                        {shopName ? `Entrar na Fila - ${shopName}` : "Entrar na Fila"}
                     </h2>
                     <p className="text-gray-400">Preencha seus dados para aguardar atendimento</p>
                 </div>

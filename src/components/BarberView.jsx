@@ -413,9 +413,12 @@ export default function BarberView() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
               <Scissors className="w-8 h-8 text-amber-500" />
-              <h1 className="text-2xl font-bold text-white">
-                {user?.shopName || "Painel do Barbeiro"}
-              </h1>
+              <div>
+                <h1 className="text-2xl font-bold text-white">
+                  {user?.shopName || "Painel do Barbeiro"}
+                </h1>
+                <p className="text-xs text-gray-400 font-mono">{user?.email} (ID: {userId?.slice(0, 5)}...)</p>
+              </div>
             </div>
             <div className="flex flex-wrap justify-center md:justify-end gap-2 w-full md:w-auto">
               <button onClick={() => setShowQrModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">

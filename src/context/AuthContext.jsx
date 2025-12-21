@@ -26,7 +26,15 @@ export function AuthProvider({ children }) {
                 };
 
                 if (userDoc.exists()) {
-                    userData = { ...userData, ...userDoc.data() };
+                    // INFO: Garantir que o ID do Auth PREVALEÇA sobre qualquer ID salvo no banco
+                    // Isso evita que contas copiadas/clonadas compartilhem o mesmo ID funcional
+                    const docData = userDoc.data();
+                    userData = {
+                        ...userData,
+                        ...docData,
+                        id: firebaseUser.uid,
+                        uid: firebaseUser.uid
+                    };
                 }
 
                 setUser(userData);
