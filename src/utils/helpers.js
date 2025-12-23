@@ -72,35 +72,4 @@ export const calculateEstimatedWait = (queue, clientIndex) => {
   return totalMinutes;
 };
 
-// Solicitar permissão de notificação
-export const requestNotificationPermission = async () => {
-  try {
-    if (!("Notification" in window)) return false;
 
-    if (Notification.permission === "granted") return true;
-
-    if (Notification.permission !== "denied") {
-      const permission = await Notification.requestPermission();
-      return permission === "granted";
-    }
-
-    return false;
-  } catch (error) {
-    console.error("Error requesting notification permission:", error);
-    return false;
-  }
-};
-
-// Enviar notificação
-export const sendNotification = (title, body) => {
-  try {
-    if (Notification.permission === "granted") {
-      new Notification(title, {
-        body,
-        icon: "/favicon.ico" // ou outro ícone
-      });
-    }
-  } catch (error) {
-    console.error("Error sending notification:", error);
-  }
-};

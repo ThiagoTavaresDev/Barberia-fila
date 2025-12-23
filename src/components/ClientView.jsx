@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Scissors, Users, Clock, Bell, Instagram, Star } from "lucide-react";
+import { Scissors, Users, Clock, Instagram, Star } from "lucide-react";
 import confetti from "canvas-confetti";
 import {
   getClientPosition,
   calculateEstimatedWait,
   formatDuration,
-  requestNotificationPermission,
-  sendNotification,
 } from "../utils/helpers";
 import { submitRating, listenQueue } from "../services/queueService";
 import { listenBarberStatus } from "../services/barberStatus";
@@ -17,9 +15,6 @@ import { db } from "../firebase";
 export default function ClientView({ queue: propQueue = [], clientId, barberId }) {
   // State Definitions (Must be first)
   const [localQueue, setLocalQueue] = useState([]);
-  const [notificationPermission, setNotificationPermission] = useState(
-    Notification.permission === "granted"
-  );
 
   // Use local queue if available (self-fetched), otherwise use props
   // We prioritize localQueue if it has data, as it means the component successfully connected itself
@@ -147,23 +142,11 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
     estimatedWaitMinutes += remainingBreak;
   }
 
-  // Solicitar permissão de notificação ao carregar
-  useEffect(() => {
-    if (clientId) {
-      requestNotificationPermission().then(setNotificationPermission);
-    }
-  }, [clientId]);
+
 
   // Efeitos quando chega a vez (Posição 1)
   useEffect(() => {
     if (position === 1 && barberStatus.status !== 'on_break') {
-      // Notificação
-      if (notificationPermission) {
-        sendNotification(
-          "É a sua vez!",
-          "Dirija-se à cadeira do barbeiro para o seu atendimento."
-        );
-      }
 
       // Celebração (Confete + Som)
       if (!hasCelebratedRef.current) {
@@ -207,28 +190,9 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
       // Resetar flag se sair da posição 1
       hasCelebratedRef.current = false;
     }
-  }, [position, notificationPermission, barberStatus.status]);
+  }, [position, barberStatus.status]);
 
-  const handleEnableNotifications = async () => {
-    try {
-      const granted = await requestNotificationPermission();
-      setNotificationPermission(granted);
 
-      if (granted) {
-        sendNotification("Notificações Ativadas", "Você será avisado quando chegar sua vez!");
-        try {
-          const audio = new Audio(tadaSound);
-          audio.volume = 0.5;
-          await audio.play();
-        } catch (audioError) {
-          console.log("Audio test failed:", audioError);
-        }
-      }
-    } catch (error) {
-      console.error("Error enabling notifications:", error);
-      alert("Não foi possível ativar as notificações. Verifique as permissões do seu navegador.");
-    }
-  };
 
   const handleRatingSubmit = async () => {
     if (rating === 0) {
@@ -449,15 +413,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
             )}
           </div>
 
-          {!notificationPermission && (
-            <button
-              onClick={handleEnableNotifications}
-              className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-amber-500/20 transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group"
-            >
-              <Bell className="w-6 h-6 group-hover:animate-bounce" />
-              <span className="text-lg">Ativar Notificações e Som</span>
-            </button>
-          )}
+
 
           <div className="bg-gray-700 rounded-lg p-4">
             <p className="text-sm text-gray-400">
