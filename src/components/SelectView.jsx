@@ -3,7 +3,7 @@ import { Scissors, Users } from "lucide-react";
 
 export default function SelectView({ onSelectView }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-6">
         <div className="text-center space-y-4">
           <Scissors className="w-20 h-20 mx-auto text-amber-500" />

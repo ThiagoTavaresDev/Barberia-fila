@@ -8,10 +8,10 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-white">Novo Agendamento</h3>
+                    <h3 className="text-xl font-bold text-ink">Novo Agendamento</h3>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white"
+                        className="text-ink/80 hover:text-white"
                     >
                         <X className="w-6 h-6" />
                     </button>
@@ -19,7 +19,7 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-gray-300 mb-2">Nome do Cliente *</label>
+                        <label className="block text-ink font-medium mb-2">Nome do Cliente *</label>
                         <input
                             type="text"
                             value={newAppointment.name}
@@ -30,7 +30,7 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
                     </div>
 
                     <div>
-                        <label className="block text-gray-300 mb-2">Telefone</label>
+                        <label className="block text-ink font-medium mb-2">Telefone</label>
                         <input
                             type="tel"
                             value={newAppointment.phone}
@@ -42,7 +42,7 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-gray-300 mb-2">Data *</label>
+                            <label className="block text-ink font-medium mb-2">Data *</label>
                             <input
                                 type="date"
                                 value={newAppointment.date}
@@ -52,7 +52,7 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
                             />
                         </div>
                         <div>
-                            <label className="block text-gray-300 mb-2">Horário *</label>
+                            <label className="block text-ink font-medium mb-2">Horário *</label>
                             <input
                                 type="time"
                                 value={newAppointment.time}
@@ -63,7 +63,7 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
                     </div>
 
                     <div>
-                        <label className="block text-gray-300 mb-2">Serviço (opcional)</label>
+                        <label className="block text-ink font-medium mb-2">Serviço (opcional)</label>
                         <select
                             value={newAppointment.serviceId}
                             onChange={(e) => setNewAppointment({ ...newAppointment, serviceId: e.target.value })}
@@ -89,12 +89,12 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
                                 />
                                 <div className="w-10 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
                             </div>
-                            <span className="ml-3 text-white font-medium group-hover:text-amber-500 transition-colors">Repetir semanalmente?</span>
+                            <span className="ml-3 text-ink font-medium group-hover:text-amber-500 transition-colors">Repetir semanalmente?</span>
                         </label>
 
                         {newAppointment.recurrenceCount > 1 && (
                             <div className="mt-3 animate-fade-in">
-                                <label className="block text-gray-400 text-sm mb-1">Por quantas semanas?</label>
+                                <label className="block text-ink font-medium text-sm mb-1">Por quantas semanas?</label>
                                 <select
                                     value={newAppointment.recurrenceCount}
                                     onChange={(e) => setNewAppointment({ ...newAppointment, recurrenceCount: parseInt(e.target.value) })}
@@ -105,7 +105,7 @@ export default function AppointmentModal({ show, onClose, newAppointment, setNew
                                     <option value="8">8 semanas (2 meses)</option>
                                     <option value="12">12 semanas (3 meses)</option>
                                 </select>
-                                <p className="text-xs text-gray-400 mt-2">
+                                <p className="text-xs text-ink/80 mt-2">
                                     Serão criados agendamentos para o mesmo dia e horário nas próximas semanas.
                                 </p>
                             </div>

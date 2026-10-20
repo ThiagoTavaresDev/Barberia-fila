@@ -67,18 +67,18 @@ export default function ProductModal({ show, onClose, productToEdit }) {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
             <div className="bg-gray-800 rounded-xl max-w-md w-full border border-gray-700 shadow-2xl overflow-hidden">
                 <div className="bg-gray-750 p-6 border-b border-gray-700 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-ink flex items-center gap-2">
                         <Package className="w-6 h-6 text-amber-500" />
                         {productToEdit ? "Editar Produto" : "Novo Produto"}
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white">
+                    <button onClick={onClose} className="text-ink/80 hover:text-white">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Nome do Produto</label>
+                        <label className="block text-sm font-medium text-ink mb-1">Nome do Produto</label>
                         <input
                             type="text"
                             required
@@ -90,7 +90,7 @@ export default function ProductModal({ show, onClose, productToEdit }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Categoria</label>
+                        <label className="block text-sm font-medium text-ink mb-1">Categoria</label>
                         <select
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
@@ -103,7 +103,7 @@ export default function ProductModal({ show, onClose, productToEdit }) {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Quantidade Atual</label>
+                            <label className="block text-sm font-medium text-ink mb-1">Quantidade Atual</label>
                             <input
                                 type="number"
                                 required
@@ -113,7 +113,7 @@ export default function ProductModal({ show, onClose, productToEdit }) {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Mínimo (Alerta)</label>
+                            <label className="block text-sm font-medium text-ink mb-1">Mínimo (Alerta)</label>
                             <input
                                 type="number"
                                 required
@@ -125,7 +125,7 @@ export default function ProductModal({ show, onClose, productToEdit }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                        <label className="block text-sm font-medium text-ink mb-1">
                             {category === 'resale' ? "Preço de Venda (R$)" : "Custo Unitário (R$)"}
                         </label>
                         <input

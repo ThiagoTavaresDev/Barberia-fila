@@ -13,6 +13,7 @@ import {
   setDoc,
   getDoc,
   increment,
+  deleteField,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
@@ -82,12 +83,15 @@ async function getNextOrder(userId) {
 }
 
 // Adicionar cliente
-export async function addClient(userId, clientData) {
+// checkinToken: token do link de auto-checkin (clientes). As regras do Firestore
+// exigem que ele bata com o link vigente do barbeiro; o barbeiro logado não precisa.
+export async function addClient(userId, clientData, checkinToken) {
   const { queue } = getCollections(userId);
   const joinedAt = Date.now();
   const order = await getNextOrder(userId);
 
   const docRef = await addDoc(queue, {
+    ...(checkinToken ? { checkinToken } : {}),
     name: clientData.name,
     phone: clientData.phone,
     serviceName: clientData.serviceName,
@@ -100,6 +104,15 @@ export async function addClient(userId, clientData) {
     order,
     status: "waiting",
   });
+
+  // A fila é pública para leitura: não deixar o token gravado no documento
+  if (checkinToken) {
+    try {
+      await updateDoc(docRef, { checkinToken: deleteField() });
+    } catch (err) {
+      console.error("Erro ao limpar token do check-in:", err);
+    }
+  }
 
   // Sync profile name immediately (Name Sync Fix)
   if (clientData.phone) {

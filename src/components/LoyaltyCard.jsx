@@ -11,7 +11,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
     // 🏆 TIER LOGIC
     let tierConfig = {
         name: "Bronze",
-        gradient: "from-orange-900 via-amber-900 to-black",
+        gradient: "from-orange-900 via-amber-900 to-gray-950",
         border: "border-amber-700/50",
         text: "text-amber-500",
         bgIcon: "bg-amber-900/20",
@@ -22,7 +22,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
     if (level >= 3 && level < 5) {
         tierConfig = {
             name: "Silver",
-            gradient: "from-gray-600 via-gray-800 to-black",
+            gradient: "from-gray-600 via-gray-800 to-gray-950",
             border: "border-gray-400/50",
             text: "text-gray-300",
             bgIcon: "bg-gray-700/30",
@@ -32,7 +32,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
     } else if (level >= 5 && level < 10) {
         tierConfig = {
             name: "Gold",
-            gradient: "from-yellow-600 via-yellow-800 to-black",
+            gradient: "from-yellow-600 via-yellow-800 to-gray-950",
             border: "border-yellow-500/50",
             text: "text-yellow-400",
             bgIcon: "bg-yellow-900/20",
@@ -42,7 +42,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
     } else if (level >= 10) {
         tierConfig = {
             name: "Diamond",
-            gradient: "from-cyan-900 via-blue-900 to-black",
+            gradient: "from-cyan-900 via-blue-900 to-gray-950",
             border: "border-cyan-500/50",
             text: "text-cyan-400",
             bgIcon: "bg-cyan-900/20",
@@ -55,7 +55,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
         <div
             ref={ref}
             // FIXED WIDTH enforced for consistent "print" output
-            className={`bg-gradient-to-br ${tierConfig.gradient} p-4 sm:p-6 rounded-xl border ${tierConfig.border} shadow-2xl relative overflow-hidden group mx-auto w-full max-w-[400px] aspect-[1.67/1]`}
+            className={`loyalty-dark bg-gradient-to-br ${tierConfig.gradient} p-4 sm:p-6 rounded-xl border ${tierConfig.border} shadow-2xl relative overflow-hidden group mx-auto w-full max-w-[400px] aspect-[1.67/1]`}
             style={{
                 // Removed fixed width constraints for mobile responsiveness
             }}
@@ -73,7 +73,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
                             Cartão Fidelidade • {tierConfig.name}
                         </span>
                         {showLevel && (
-                            <span className="text-[10px] text-white/60 font-medium bg-white/5 px-2 py-0.5 rounded-full border border-white/5 tracking-wider">
+                            <span className="text-[10px] text-white/75 font-medium bg-white/5 px-2 py-0.5 rounded-full border border-white/5 tracking-wider">
                                 NÍVEL {level}
                             </span>
                         )}
@@ -81,7 +81,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
                 </div>
                 <div className="text-right">
                     <h3 className="text-white font-bold text-base tracking-wide">{String(client.name).split(" ")[0]}</h3>
-                    <span className="text-xs text-white/40 font-mono">#{phoneSuffix}</span>
+                    <span className="text-xs text-white/70 font-mono">#{phoneSuffix}</span>
                 </div>
             </div>
 
@@ -103,7 +103,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
                             {isStamped ? (
                                 tierConfig.icon // Repeats the tier icon as the stamp
                             ) : (
-                                <span className="text-[10px] text-white/30 font-bold">{index + 1}</span>
+                                <span className="text-[10px] text-white/60 font-bold">{index + 1}</span>
                             )}
                         </div>
                     );
@@ -111,7 +111,7 @@ const LoyaltyCard = forwardRef(({ client, profile, showLevel = true }, ref) => {
             </div>
 
             <div className="flex justify-between items-center text-xs relative z-10 border-t border-white/10 pt-3 mt-auto">
-                <span className="text-white/40 font-medium">
+                <span className="text-white/70 font-medium">
                     {level >= 10 ? "Você é uma lenda!" : "Complete 10 e suba de nível!"}
                 </span>
                 <div className="flex gap-1" title={`Nível Atual: ${level}`}>

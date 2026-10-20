@@ -35,10 +35,10 @@ export default function EditClientModal({
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full space-y-6">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-white">Editar Cliente</h3>
+                    <h3 className="text-xl font-bold text-ink">Editar Cliente</h3>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white"
+                        className="text-ink/80 hover:text-white"
                     >
                         <X className="w-6 h-6" />
                     </button>
@@ -46,7 +46,7 @@ export default function EditClientModal({
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-gray-300 mb-2">Nome</label>
+                        <label className="block text-ink font-medium mb-2">Nome</label>
                         <input
                             type="text"
                             value={client.name}
@@ -56,7 +56,7 @@ export default function EditClientModal({
                     </div>
 
                     <div>
-                        <label className="block text-gray-300 mb-2">Telefone</label>
+                        <label className="block text-ink font-medium mb-2">Telefone</label>
                         <input
                             type="tel"
                             value={client.phone}
@@ -67,7 +67,7 @@ export default function EditClientModal({
                     </div>
 
                     <div>
-                        <label className="block text-gray-300 mb-2">Serviço</label>
+                        <label className="block text-ink font-medium mb-2">Serviço</label>
                         <select
                             value={client.serviceId}
                             onChange={(e) => setClient({ ...client, serviceId: e.target.value })}
@@ -82,7 +82,7 @@ export default function EditClientModal({
                     </div>
 
                     <div>
-                        <label className="block text-gray-300 mb-2">Observações / Preferências</label>
+                        <label className="block text-ink font-medium mb-2">Observações / Preferências</label>
                         <textarea
                             value={client.notes || ""}
                             onChange={(e) => setClient({ ...client, notes: e.target.value })}
@@ -93,7 +93,7 @@ export default function EditClientModal({
                     </div>
 
                     <div>
-                        <label className="block text-gray-300 mb-2">Foto do Corte</label>
+                        <label className="block text-ink font-medium mb-2">Foto do Corte</label>
                         {client.photoUrl ? (
                             <div className="space-y-2">
                                 <div className="relative">
@@ -113,7 +113,7 @@ export default function EditClientModal({
                                 </div>
                                 <button
                                     onClick={handlePhotoUpload}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-ink font-semibold rounded-lg transition-colors"
                                 >
                                     <Camera className="w-4 h-4" />
                                     Substituir Foto
@@ -122,7 +122,7 @@ export default function EditClientModal({
                         ) : (
                             <button
                                 onClick={handlePhotoUpload}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-ink font-semibold rounded-lg transition-colors"
                             >
                                 <Camera className="w-4 h-4" />
                                 Adicionar Foto

@@ -110,7 +110,7 @@ export default function ServiceModal({ show, onClose, newService, setNewService,
                             <button
                                 onClick={addMaterial}
                                 disabled={!selectedMaterial || !quantity}
-                                className="w-full bg-gray-600 hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                className="w-full bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
                             >
                                 <Plus className="w-4 h-4" /> Adicionar Material
                             </button>

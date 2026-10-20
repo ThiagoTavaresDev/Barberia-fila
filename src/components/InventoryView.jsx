@@ -94,7 +94,7 @@ export default function InventoryView({ userId }) {
                 </div>
             ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-20 bg-gray-800/50 rounded-xl border border-gray-700 border-dashed">
-                    <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <Package className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                     <p className="text-gray-400">Nenhum produto encontrado.</p>
                 </div>
             ) : (

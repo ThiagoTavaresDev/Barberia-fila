@@ -71,6 +71,11 @@ export function AuthProvider({ children }) {
         setUser(prev => ({ ...prev, ...updates }));
     };
 
+    // Atualiza apenas o estado local (quando a escrita no Firestore já foi feita em outro lugar)
+    const patchUser = (updates) => {
+        setUser(prev => (prev ? { ...prev, ...updates } : prev));
+    };
+
     const logout = () => {
         return signOut(auth);
     };
@@ -80,6 +85,7 @@ export function AuthProvider({ children }) {
         login,
         signup,
         updateProfile,
+        patchUser,
         logout,
         isAuthenticated: !!user
     };

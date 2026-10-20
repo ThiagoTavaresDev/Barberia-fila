@@ -94,13 +94,13 @@ export default function ClientProfileModal({ show, onClose, client }) {
                             {client.name?.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <h3 className="text-xl font-bold text-white leading-tight">{client.name}</h3>
-                            <p className="text-sm text-gray-400 font-mono">{client.phone}</p>
+                            <h3 className="text-xl font-bold text-ink leading-tight">{client.name}</h3>
+                            <p className="text-sm text-ink/80 font-mono">{client.phone}</p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white transition-colors p-1"
+                        className="text-ink/80 hover:text-white transition-colors p-1"
                     >
                         <X className="w-6 h-6" />
                     </button>
@@ -119,18 +119,18 @@ export default function ClientProfileModal({ show, onClose, client }) {
                                 <div className="bg-gray-700/30 p-3 rounded-lg border border-gray-600/50">
                                     <div className="flex items-center gap-2 mb-1">
                                         <History className="w-4 h-4 text-blue-400" />
-                                        <span className="text-xs text-gray-400">Total de Visitas</span>
+                                        <span className="text-xs text-ink/80">Total de Visitas</span>
                                     </div>
-                                    <p className="text-lg font-bold text-white">
+                                    <p className="text-lg font-bold text-ink">
                                         {profile?.totalVisits || (client.totalVisits ?? 1)}
                                     </p>
                                 </div>
                                 <div className="bg-gray-700/30 p-3 rounded-lg border border-gray-600/50">
                                     <div className="flex items-center gap-2 mb-1">
                                         <Calendar className="w-4 h-4 text-green-400" />
-                                        <span className="text-xs text-gray-400">Última Visita</span>
+                                        <span className="text-xs text-ink/80">Última Visita</span>
                                     </div>
-                                    <p className="text-sm font-medium text-white truncate">
+                                    <p className="text-sm font-medium text-ink truncate">
                                         {profile?.lastVisit
                                             ? new Date(profile.lastVisit).toLocaleDateString('pt-BR')
                                             : "Hoje"}
@@ -146,11 +146,11 @@ export default function ClientProfileModal({ show, onClose, client }) {
                             {/* Style Gallery */}
                             <div>
                                 <div className="flex items-center justify-between mb-3">
-                                    <h4 className="font-bold text-white flex items-center gap-2">
+                                    <h4 className="font-bold text-ink flex items-center gap-2">
                                         <ImageIcon className="w-4 h-4 text-amber-500" />
                                         Galeria de Estilo
                                     </h4>
-                                    <label className="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center gap-1 text-white border border-gray-600">
+                                    <label className="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center gap-1 text-ink font-semibold border border-gray-600">
                                         {uploading ? (
                                             <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                         ) : (
@@ -169,8 +169,8 @@ export default function ClientProfileModal({ show, onClose, client }) {
 
                                 {photos.length === 0 ? (
                                     <div className="bg-gray-700/20 border border-gray-700 border-dashed rounded-lg p-6 text-center">
-                                        <Camera className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                                        <p className="text-sm text-gray-500">Nenhuma foto salva.</p>
+                                        <Camera className="w-8 h-8 text-ink/40 mx-auto mb-2" />
+                                        <p className="text-sm text-ink/70">Nenhuma foto salva.</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-3 gap-2">
@@ -215,7 +215,7 @@ export default function ClientProfileModal({ show, onClose, client }) {
                             alt="Visualização"
                             className="w-full h-auto rounded-lg shadow-2xl border border-gray-800"
                         />
-                        <div className="mt-4 flex justify-between items-center text-gray-400 text-sm px-2">
+                        <div className="mt-4 flex justify-between items-center text-fg/80 text-sm px-2">
                             <span>{new Date(viewingPhoto.createdAt).toLocaleDateString()}</span>
                             <span>{viewingPhoto.serviceName}</span>
                         </div>

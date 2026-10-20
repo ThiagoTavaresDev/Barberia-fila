@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Scissors, Users, Clock, Instagram, Star } from "lucide-react";
+import BrandLogo from "./BrandLogo";
+import { useTheme, usePublicBranding } from "../context/ThemeContext";
+import { getAccentColors } from "../utils/themes";
 import confetti from "canvas-confetti";
 import {
   getClientPosition,
@@ -24,7 +27,11 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
   const [hasRated, setHasRated] = useState(false);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [barberStatus, setBarberStatus] = useState({ status: 'available' });
-  const [instagramLink, setInstagramLink] = useState("");
+
+  // Identidade visual da barbearia (tema, logo, instagram) vinda do link
+  usePublicBranding(barberId);
+  const { branding, themeId } = useTheme();
+  const instagramLink = branding.instagramLink || "";
 
   // Status Verification State (Race Condition Fix)
   const [isVerifying, setIsVerifying] = useState(() => {
@@ -112,26 +119,12 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
     if (!barberId) return;
     const unsubscribe = listenBarberStatus(barberId, setBarberStatus);
 
-    // Buscar perfil do barbeiro
-    const fetchBarberProfile = async () => {
-      try {
-        const docRef = doc(db, "users", barberId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setInstagramLink(data.instagramLink || "");
-          if (data.shopName) {
-            document.title = data.shopName;
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching barber profile:", error);
-      }
-    };
-    fetchBarberProfile();
-
     return () => unsubscribe();
   }, [barberId]);
+
+  useEffect(() => {
+    if (branding.shopName) document.title = branding.shopName;
+  }, [branding.shopName]);
 
   // Calcular tempo estimado de espera (soma dos serviços anteriores)
   let estimatedWaitMinutes = calculateEstimatedWait(queue, clientIndex);
@@ -157,8 +150,8 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
         const end = Date.now() + duration;
 
         const frame = () => {
-          // Cores laranja (Amber do Tailwind)
-          const colors = ['#f59e0b', '#d97706', '#b45309'];
+          // Cores de destaque do tema da barbearia
+          const colors = getAccentColors(themeId);
 
           confetti({
             particleCount: 1,
@@ -190,7 +183,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
       // Resetar flag se sair da posição 1
       hasCelebratedRef.current = false;
     }
-  }, [position, barberStatus.status]);
+  }, [position, barberStatus.status, themeId]);
 
 
 
@@ -217,7 +210,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
   if (!clientId || (position === 0 && (!client || client.status !== 'waiting'))) {
     if (isVerifying) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex items-center justify-center p-4">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <h2 className="text-xl font-bold text-white">Localizando seu agendamento...</h2>
@@ -228,7 +221,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
 
     if (!hasRated && client && client.status === "done" && !client.rating) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
             <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <Scissors className="w-10 h-10 text-green-500" />
@@ -253,7 +246,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
                   <Star
                     className={`w-12 h-12 ${star <= rating
                       ? "fill-amber-500 text-amber-500"
-                      : "text-gray-600 hover:text-amber-500"
+                      : "text-gray-500 hover:text-amber-500"
                       }`}
                   />
                 </button>
@@ -287,11 +280,9 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
-          <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Scissors className="w-10 h-10 text-amber-500" />
-          </div>
+          <BrandLogo variant="badge" size="w-20 h-20" className="mx-auto mb-6" />
 
           <h2 className="text-2xl font-bold text-white">
             {hasRated ? "Obrigado pela avaliação!" : "Atendimento Finalizado"}
@@ -325,7 +316,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
   // Se o barbeiro estiver em pausa indeterminada
   if (barberStatus.status === 'on_break' && !barberStatus.breakEndsAt) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 text-center space-y-6">
           <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
             <Clock className="w-10 h-10 text-amber-500" />
@@ -348,21 +339,21 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-6">
         <div className="bg-gray-800 rounded-xl p-8 text-center space-y-6">
-          <Scissors className="w-16 h-16 mx-auto text-amber-500" />
+          <BrandLogo size="w-16 h-16" className="mx-auto" />
           <h2 className="text-3xl font-bold text-white">Olá, {client.name}!</h2>
 
           <div
             className={`relative overflow-hidden rounded-xl p-8 ${position === 1
-              ? "bg-gradient-to-r from-green-600 to-green-500"
-              : "bg-gradient-to-r from-amber-600 to-amber-500"
+              ? "bg-gradient-to-r from-green-700 to-green-600"
+              : "bg-gradient-to-r from-amber-700 to-amber-600"
               }`}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
 
-            <p className="text-amber-100 text-sm uppercase tracking-wide mb-2 relative z-10">
+            <p className="text-fg text-sm font-semibold uppercase tracking-wide mb-2 relative z-10">
               Sua posição na fila
             </p>
 
@@ -370,7 +361,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
               {position > 0 ? `${position}º` : "--"}
             </p>
             {position === 0 && (
-              <p className="text-xs text-amber-200 mt-2 relative z-10 animate-pulse">
+              <p className="text-xs text-fg mt-2 relative z-10 animate-pulse">
                 Sincronizando fila...
               </p>
             )}
@@ -406,7 +397,7 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
 
             {barberStatus.status === 'on_break' && barberStatus.breakEndsAt && (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
-                <p className="text-amber-200 text-sm">
+                <p className="text-fg text-sm">
                   ⚠️ O barbeiro está em uma pausa programada. O tempo estimado já inclui essa pausa.
                 </p>
               </div>

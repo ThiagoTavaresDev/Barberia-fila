@@ -72,7 +72,7 @@ export default function GoalConfigModal({ show, onClose }) {
                                     }
                                 }}
                                 placeholder="Ex: 200.00"
-                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-600"
+                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-500"
                             />
                         </div>
                     </div>
@@ -92,7 +92,7 @@ export default function GoalConfigModal({ show, onClose }) {
                                     }
                                 }}
                                 placeholder="Aluguel, Luz, etc..."
-                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-600"
+                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-500"
                             />
                         </div>
                         <p className="text-xs text-gray-500 mt-1 ml-1">Para calcular seu lucro líquido.</p>
@@ -113,7 +113,7 @@ export default function GoalConfigModal({ show, onClose }) {
                                     }
                                 }}
                                 placeholder="Ex: 5000.00"
-                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-600"
+                                className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder-gray-500"
                             />
                         </div>
                     </div>

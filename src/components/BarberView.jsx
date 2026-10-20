@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import InventoryView from "./InventoryView";
 import {
   Scissors, Users, Trash2, CheckCircle, Clock, User, Phone, Briefcase, Plus,
   Settings, ArrowUp, ArrowDown, MessageCircle, History, DollarSign,
-  Calendar, CalendarClock, XCircle, PlayCircle, Coffee, Camera, QrCode, UserCog, Package
+  Calendar, CalendarClock, XCircle, PlayCircle, Coffee, Camera, QrCode, UserCog, Package, SlidersHorizontal
 } from "lucide-react";
 import LiveTimer from "./LiveTimer";
 import { compressImage } from "../utils/imageUtils";
@@ -18,6 +18,7 @@ import {
   addService, addAppointment, removeService, getClientProfile, listenProducts
 } from "../services/queueService";
 import { listenBarberStatus, endBreak } from "../services/barberStatus";
+import { formatTimeLeft, WARNING_MINUTES } from "../services/checkinLink";
 import { useAuth } from "../context/AuthContext";
 import { Edit2, Undo2 } from "lucide-react";
 import DashboardView from "./DashboardView";
@@ -26,10 +27,11 @@ import AppointmentModal from "./modals/AppointmentModal";
 import EditClientModal from "./modals/EditClientModal";
 import QrModal from "./modals/QrModal";
 import BreakModal from "./modals/BreakModal";
-import { ProfileModal } from "./modals/ProfileModal";
 import FinishServiceModal from "./modals/FinishServiceModal";
 import ClientProfileModal from "./modals/ClientProfileModal";
 import ClientsView from "./ClientsView";
+import SettingsView from "./SettingsView";
+import BrandLogo from "./BrandLogo";
 
 export default function BarberView() {
   const { user, logout } = useAuth();
@@ -51,7 +53,6 @@ export default function BarberView() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showBreakModal, setShowBreakModal] = useState(false);
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [clientToFinish, setClientToFinish] = useState(null);
 
@@ -113,6 +114,29 @@ export default function BarberView() {
       unsubscribeProducts();
     };
   }, [userId]);
+
+  // Validade do link de check-in: avisa WARNING_MINUTES antes de expirar
+  const checkinLink = user?.checkinLink;
+  const [linkNow, setLinkNow] = useState(Date.now());
+  const warnedLinkIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!checkinLink) return;
+    setLinkNow(Date.now());
+    const interval = setInterval(() => setLinkNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, [checkinLink]);
+
+  const linkMsLeft = checkinLink ? checkinLink.expiresAt - linkNow : null;
+  const linkExpired = linkMsLeft !== null && linkMsLeft <= 0;
+  const linkExpiring = linkMsLeft !== null && linkMsLeft > 0 && linkMsLeft <= WARNING_MINUTES * 60 * 1000;
+
+  useEffect(() => {
+    if (!checkinLink || !linkExpiring || warnedLinkIdRef.current === checkinLink.linkId) return;
+    warnedLinkIdRef.current = checkinLink.linkId;
+    const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+    audio.play().catch(e => console.log("Audio play failed:", e));
+  }, [checkinLink, linkExpiring]);
 
   // Listener para status do barbeiro
   useEffect(() => {
@@ -406,13 +430,28 @@ export default function BarberView() {
   const totalQueueTime = queue.reduce((acc, curr) => acc + (curr.serviceDuration || 30), 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
+        {/* Aviso de validade do link de check-in */}
+        {(linkExpiring || linkExpired) && (
+          <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 rounded-xl p-4 border ${linkExpired ? "bg-red-900/40 border-red-500 text-red-200" : "bg-amber-900/40 border-amber-500 text-amber-200"}`}>
+            <div className="flex items-center gap-2 text-sm sm:text-base">
+              <Clock className="w-5 h-5 shrink-0" />
+              {linkExpired
+                ? "O link de check-in expirou. Os clientes não conseguem mais entrar na fila por ele."
+                : `O link de check-in expira em ${formatTimeLeft(linkMsLeft)}.`}
+            </div>
+            <button onClick={() => setShowQrModal(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg whitespace-nowrap">
+              Gerar novo link
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="bg-gray-800 rounded-xl p-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
-              <Scissors className="w-8 h-8 text-amber-500" />
+              <BrandLogo size="w-10 h-10" />
               <div>
                 <h1 className="text-2xl font-bold text-white">
                   {user?.shopName || "Painel do Barbeiro"}
@@ -423,12 +462,12 @@ export default function BarberView() {
             <div className="flex flex-wrap justify-center md:justify-end gap-2 w-full md:w-auto">
               <button onClick={() => setShowQrModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
                 <QrCode className="w-4 h-4" /> Auto-Checkin
+                {(linkExpiring || linkExpired) && (
+                  <span className={`w-2 h-2 rounded-full ${linkExpired ? "bg-red-500" : "bg-amber-500"}`} />
+                )}
               </button>
               <button onClick={() => setShowBreakModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
                 <Coffee className="w-4 h-4" /> Pausa
-              </button>
-              <button onClick={() => setShowProfileModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
-                <User className="w-4 h-4" /> Perfil
               </button>
               <button onClick={() => setShowServiceModal(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex-1 md:flex-none whitespace-nowrap">
                 <Settings className="w-4 h-4" /> Serviços
@@ -440,7 +479,7 @@ export default function BarberView() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mb-4">
             <button onClick={() => setCurrentView("queue")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "queue" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
               <Users className="w-4 h-4" /> <span>Fila ({queue.length})</span>
             </button>
@@ -458,6 +497,9 @@ export default function BarberView() {
             </button>
             <button onClick={() => setCurrentView("inventory")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "inventory" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
               <Package className="w-4 h-4" /> <span>Estoque</span>
+            </button>
+            <button onClick={() => setCurrentView("settings")} className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${currentView === "settings" ? "bg-amber-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
+              <SlidersHorizontal className="w-4 h-4" /> <span>Configurações</span>
             </button>
           </div>
 
@@ -674,6 +716,7 @@ export default function BarberView() {
 
         {/* INVENTORY VIEW */}
         {currentView === "inventory" && <InventoryView userId={userId} />}
+        {currentView === "settings" && <SettingsView />}
 
       </div>
 
@@ -684,11 +727,10 @@ export default function BarberView() {
 
       <EditClientModal client={editingClient} setClient={setEditingClient} onClose={() => setEditingClient(null)} handleSave={handleSaveEdit} services={services} setViewingPhoto={setViewingPhoto} />
 
-      <QrModal show={showQrModal} onClose={() => setShowQrModal(false)} checkInUrl={`${window.location.origin}/checkin?barber=${userId}`} />
+      <QrModal show={showQrModal} onClose={() => setShowQrModal(false)} />
 
       <BreakModal show={showBreakModal} onClose={() => setShowBreakModal(false)} barberStatus={barberStatus} breakTimeRemaining={breakTimeRemaining} userId={userId} />
 
-      <ProfileModal show={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
       <ClientProfileModal show={showClientProfileModal} onClose={() => setShowClientProfileModal(false)} client={selectedClientForProfile} />
 

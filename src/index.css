@@ -10,6 +10,7 @@
 
 body {
   margin: 0;
+  background-color: rgb(var(--gray-950));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
@@ -17,13 +18,173 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+
+/* ------------------------------------------------------------------
+   Tema (ver src/utils/themes.js)
+   `text-white` vira a cor de texto padrao do tema (--fg): branco nos temas
+   escuros e quase-preto nos claros. Sobre fundos solidos coloridos o texto
+   continua branco (ou a cor de contraste do preset, no caso do destaque).
+------------------------------------------------------------------- */
+:root {
+  --fg: 255 255 255;
+  --fg-base: 255 255 255;
+  --ink: 255 255 255;
+  --on-accent: 255 255 255;
+  --on-accent-500: 255 255 255;
+}
+
+.text-white,
+.hover\:text-white:hover,
+.group:hover .group-hover\:text-white {
+  color: rgb(var(--fg));
+}
+
+[class~="bg-amber-600"],
+[class~="bg-amber-700"],
+[class~="bg-amber-800"] {
+  --fg: var(--on-accent);
+}
+
+/* O tom 500 serve de texto no cartao e de fundo de etiquetas: tem texto de contraste proprio */
+[class~="bg-amber-500"] {
+  --fg: var(--on-accent-500);
+}
+
+[class~="bg-green-500"],
+[class~="bg-green-600"],
+[class~="bg-green-700"],
+[class~="bg-green-800"],
+[class~="bg-red-500"],
+[class~="bg-red-600"],
+[class~="bg-red-700"],
+[class~="bg-red-800"],
+[class~="bg-blue-500"],
+[class~="bg-blue-600"],
+[class~="bg-blue-700"],
+[class~="bg-blue-800"],
+[class~="bg-purple-500"],
+[class~="bg-purple-600"],
+[class~="bg-purple-700"],
+[class~="bg-purple-800"],
+[class~="bg-cyan-500"],
+[class~="bg-cyan-600"],
+[class~="bg-cyan-700"],
+[class~="bg-cyan-800"],
+[class~="bg-orange-500"],
+[class~="bg-orange-600"],
+[class~="bg-orange-700"],
+[class~="bg-orange-800"],
+[class~="bg-emerald-500"],
+[class~="bg-emerald-600"],
+[class~="bg-emerald-700"],
+[class~="bg-emerald-800"],
+[class~="bg-pink-500"],
+[class~="bg-pink-600"],
+[class~="bg-pink-700"],
+[class~="bg-pink-800"],
+[class~="bg-yellow-500"],
+[class~="bg-yellow-600"],
+[class~="bg-yellow-700"],
+[class~="bg-yellow-800"],
+[class~="bg-indigo-500"],
+[class~="bg-indigo-600"],
+[class~="bg-indigo-700"],
+[class~="bg-indigo-800"],
+[class~="bg-teal-500"],
+[class~="bg-teal-600"],
+[class~="bg-teal-700"],
+[class~="bg-teal-800"],
+[class~="bg-black/95"] {
+  --fg: 255 255 255;
+}
+
+/* Superficies cinza sempre usam o texto do tema, mesmo dentro de um ancestral colorido */
+[class~="bg-gray-700"],
+[class~="bg-gray-800"],
+[class~="bg-gray-900"] {
+  --fg: var(--fg-base);
+}
+
+/* Cores de status mais escuras para manter contraste sobre fundos claros */
+:root[data-mode="light"] .text-green-400, :root[data-mode="light"] .text-green-500 { color: #15803d; }
+:root[data-mode="light"] .hover\:text-green-300:hover { color: #166534; }
+:root[data-mode="light"] .text-red-200, :root[data-mode="light"] .text-red-400, :root[data-mode="light"] .text-red-500 { color: #b91c1c; }
+:root[data-mode="light"] .hover\:text-red-300:hover, :root[data-mode="light"] .hover\:text-red-400:hover { color: #991b1b; }
+:root[data-mode="light"] .text-blue-200, :root[data-mode="light"] .text-blue-400, :root[data-mode="light"] .text-blue-500 { color: #1d4ed8; }
+:root[data-mode="light"] .hover\:text-blue-300:hover, :root[data-mode="light"] .hover\:text-blue-400:hover { color: #1e40af; }
+:root[data-mode="light"] .text-purple-500 { color: #7e22ce; }
+:root[data-mode="light"] .text-orange-400 { color: #c2410c; }
+:root[data-mode="light"] .hover\:text-orange-300:hover { color: #9a3412; }
+:root[data-mode="light"] .text-cyan-400, :root[data-mode="light"] .text-cyan-500 { color: #0e7490; }
+:root[data-mode="light"] .text-emerald-400, :root[data-mode="light"] .text-emerald-500 { color: #047857; }
+:root[data-mode="light"] .text-yellow-400, :root[data-mode="light"] .text-yellow-500 { color: #a16207; }
+
 @layer utilities {
     @keyframes shimmer {
       0% { transform: translateX(-100%); }
       100% { transform: translateX(100%); }
+    }
+    @keyframes pop {
+      0% { transform: scale(0.92); opacity: 0.6; }
+      60% { transform: scale(1.06); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: pop 0.45s ease-out;
     }
     .animate-shimmer {
       animation: shimmer 2s infinite;
     }
   }
   
+/* Faixas de aviso com fundo escuro translucido: no tema claro viram tons pastel */
+:root[data-mode="light"] .bg-red-900\/40 { background-color: #fee2e2; }
+:root[data-mode="light"] .bg-yellow-900\/20 { background-color: #fef9c3; }
+
+/* Cartao fidelidade (e imagem exportada): visual escuro fixo, independente do tema */
+.loyalty-dark {
+  --gray-50: 248 250 251;
+  --gray-100: 239 241 246;
+  --gray-200: 222 228 237;
+  --gray-300: 196 206 222;
+  --gray-400: 137 157 189;
+  --gray-500: 83 107 147;
+  --gray-600: 55 72 98;
+  --gray-700: 42 55 75;
+  --gray-800: 28 36 49;
+  --gray-900: 18 24 33;
+  --gray-950: 11 14 20;
+  --fg: 255 255 255;
+  --fg-base: 255 255 255;
+  /* destaque amber fixo (o cartao usa amber-500/900 no nivel Bronze) */
+  --accent-50: 254 249 240;
+  --accent-100: 253 236 206;
+  --accent-200: 251 220 167;
+  --accent-300: 249 200 118;
+  --accent-400: 247 174 50;
+  --accent-500: 245 158 11;
+  --accent-600: 212 136 9;
+  --accent-700: 197 127 8;
+  --accent-800: 163 105 7;
+  --accent-900: 65 42 3;
+  --accent-950: 29 19 1;
+}
+:root[data-mode="light"] .loyalty-dark .text-yellow-400 { color: #facc15; }
+:root[data-mode="light"] .loyalty-dark .text-cyan-400 { color: #22d3ee; }
+:root[data-mode="light"] .loyalty-dark .bg-yellow-900\/20 { background-color: rgb(113 63 18 / 0.2); }
+
+/* Botoes/cartoes em degrade colorido: mesmo tratamento dos fundos solidos */
+[class~="from-amber-600"], [class~="from-amber-700"] { --fg: var(--on-accent); }
+[class~="from-purple-600"], [class~="from-green-600"], [class~="from-green-700"] { --fg: 255 255 255; }
+
+/* Temas claros: campos de digitacao com borda visivel (o fundo do campo e quase igual ao do cartao) */
+:root[data-mode="light"] input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]),
+:root[data-mode="light"] select,
+:root[data-mode="light"] textarea {
+  border: 1px solid rgb(var(--gray-500) / 0.45);
+}
+:root[data-mode="light"] input:focus,
+:root[data-mode="light"] select:focus,
+:root[data-mode="light"] textarea:focus {
+  border-color: rgb(var(--accent-500));
+}

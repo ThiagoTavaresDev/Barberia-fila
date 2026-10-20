@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import BarberView from "./components/BarberView";
 import ClientView from "./components/ClientView";
 import CheckInView from "./components/CheckInView";
@@ -18,7 +19,8 @@ function AppContent() {
     isClient: false,
     isRegister: false, // New route
     paramId: null, // clientId or just placeholder
-    barberId: null // barberId from URL
+    barberId: null, // barberId from URL
+    checkinToken: null // token do link de check-in (?t=)
   });
 
   // Detect URL parameters and path
@@ -29,7 +31,7 @@ function AppContent() {
     const path = window.location.pathname;
 
     if (path === "/checkin") {
-      setRoute({ isCheckIn: true, barberId: barberParam });
+      setRoute({ isCheckIn: true, barberId: barberParam, checkinToken: params.get("t") });
     } else if (path === "/register") {
       setRoute({ isRegister: true });
     } else if (path === "/login") {
@@ -69,7 +71,7 @@ function AppContent() {
   }
 
   if (route.isCheckIn) {
-    return <CheckInView barberId={route.barberId} />;
+    return <CheckInView barberId={route.barberId} token={route.checkinToken} />;
   }
 
   if (route.isClient && route.paramId) {
@@ -86,7 +88,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </AuthProvider>
   );
 }
