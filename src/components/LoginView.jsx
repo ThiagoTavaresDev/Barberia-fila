@@ -9,6 +9,14 @@ export default function LoginView() {
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
 
+    // Voltou da redefinição de senha (?reset=ok): avisa que já pode entrar com a senha nova
+    const resetDone = new URLSearchParams(window.location.search).get('reset') === 'ok';
+
+    // Leva o e-mail já digitado para a tela "Esqueci minha senha"
+    const rememberEmail = () => {
+        try { sessionStorage.setItem('resetEmail', email.trim()); } catch { /* sem armazenamento: a pessoa digita de novo */ }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -39,6 +47,12 @@ export default function LoginView() {
                     <h2 className="text-3xl font-bold text-white mb-2">Barber Fila</h2>
                     <p className="text-gray-400">Entre para gerenciar sua barbearia</p>
                 </div>
+
+                {resetDone && !error && (
+                    <div role="status" className="bg-green-500/10 border border-green-500/30 text-ink p-3 rounded-lg mb-6 text-sm">
+                        Senha alterada com sucesso. Entre com a sua nova senha.
+                    </div>
+                )}
 
                 {error && (
                     <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-3 rounded-lg mb-6 text-sm">
@@ -72,6 +86,15 @@ export default function LoginView() {
                                 className="w-full pl-10 pr-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-gray-500"
                                 placeholder="******"
                             />
+                        </div>
+                        <div className="mt-2 text-right">
+                            <a
+                                href="/forgot-password"
+                                onClick={rememberEmail}
+                                className="text-sm text-amber-500 hover:text-amber-400 font-medium"
+                            >
+                                Esqueci minha senha
+                            </a>
                         </div>
                     </div>
 

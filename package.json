@@ -25,7 +25,9 @@
     "test:pix": "node --no-warnings scripts/test-pix.mjs",
     "test:contrast": "node --no-warnings scripts/audit-theme-contrast.mjs",
     "test:rules": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-barber \"node scripts/test-firestore-rules.mjs\"",
-    "test:pix-flow": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-barber \"node scripts/test-pix-flow.mjs\""
+    "test:pix-flow": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-barber \"node scripts/test-pix-flow.mjs\"",
+    "test:password": "node --no-warnings scripts/test-password.mjs",
+    "test:password-reset": "npx --yes firebase-tools@15 emulators:exec --only auth --project demo-barber \"node scripts/test-password-reset.mjs\""
   },
   "eslintConfig": {
     "extends": [

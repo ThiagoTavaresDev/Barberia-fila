@@ -6,6 +6,7 @@ Sistema completo de gerenciamento de fila para barbearias com painel do barbeiro
 
 ### Adicionado
 
+- **Redefinição de senha** ("Esqueci minha senha" no login), no padrão de mercado: o usuário informa o e-mail, recebe um link e cria a nova senha digitando-a duas vezes. A senha precisa ser **forte** e **diferente da atual**. Veja [Redefinição de senha](#-redefinição-de-senha).
 - **Pix adiantado**: depois de entrar na fila, o cliente pode pagar o serviço que escolheu por Pix (código "Copia e Cola" ou QR Code, sempre com o **preço daquele serviço**) e enviar o comprovante. O barbeiro configura a chave nas Configurações, é avisado no painel e confere cada pagamento. Pagou e não veio? O barbeiro decide entre **devolver** ou guardar como **crédito** para o próximo atendimento. Veja [Pix adiantado](#-pix-adiantado).
 - **Segurança reforçada**: novo `firestore.rules` no repositório, com a fila pública protegida contra adulteração de preço/serviço, chave secreta por cliente para o pagamento, comprovantes só para o dono, senha para mudar a chave Pix e QR Codes gerados no próprio navegador. Veja [Segurança](#-segurança).
 - **Testes automatizados** do Pix, das regras do Firestore (emulador) e do fluxo completo. Veja [Testes](#-testes).
@@ -225,6 +226,44 @@ Outros casos: pagou sem comprovante (**Marcar Pix recebido**), pagou a menos ou 
 - Entradas criadas antes desta versão não têm a chave secreta: o Pix aparece quando você reenviar o link pelo painel (a chave é criada na hora).
 - Agendamentos não têm Pix.
 
+## 🔑 Redefinição de senha
+
+No login, o link **Esqueci minha senha** leva ao fluxo em duas telas:
+
+1. **Pede o e-mail** (`/forgot-password`). A resposta é sempre a mesma, exista ou não conta com aquele e-mail (não revela quem é cliente). O botão "Reenviar e-mail" espera 60 segundos.
+2. **Nova senha** (`/auth/action`, aberta pelo link que chega no e-mail; vale por 1 hora e só funciona uma vez). A conta aparece mascarada (`z*@barbearia.com`) e a senha é digitada **duas vezes**, com botão de mostrar/esconder.
+
+Por que o e-mail não é pedido na mesma tela da senha nova: sem o link enviado ao e-mail, qualquer pessoa que soubesse o e-mail de outra conta conseguiria trocar a senha dela.
+
+### Regras da senha nova
+
+O botão **Salvar nova senha** só libera quando a senha cumpre todas as regras e as duas digitações são iguais. A lista de regras vai sendo marcada enquanto a pessoa digita, junto com um medidor de força (Fraca, Razoável, Forte, Muito forte).
+
+- Pelo menos **8 caracteres**, com **maiúscula, minúscula, número e símbolo**
+- Não pode ser uma **palavra comum**, como `senha`, `admin` ou `barbearia` (inclusive com letras trocadas por números, como `P@ssw0rd`)
+- Não pode conter o **e-mail** da conta
+- Sem o mesmo caractere 3 vezes seguidas (`aaa`) nem sequências óbvias (`1234`, `abcd`, `qwer`)
+- **Não pode ser igual à senha atual**: o Firebase não revela senhas, então o app tenta entrar com a senha nova em um login separado (sem mexer na sessão): se entrar, é a mesma e a troca é recusada
+
+As regras estão em `src/utils/password.js` (fáceis de ajustar) e o fluxo em `src/services/passwordReset.js`.
+
+### Configuração no Firebase (uma vez)
+
+É no **Authentication** do Firebase (o login), não no Firestore (o banco de dados). Faça **depois** de publicar o site com esta versão: o link do e-mail passa a abrir o seu site.
+
+1. **Authentication → Templates (Modelos) → um dos modelos → lápis → personalizar URL de ação** e informe `https://SEU-DOMINIO/auth/action`.
+   - A URL de ação vale para **todos** os e-mails do Firebase: redefinição de senha **e** confirmação de e-mail do cadastro. O app olha o `?mode=` do link e abre a tela certa (`resetPassword`: nova senha; `verifyEmail`: "E-mail confirmado!").
+   - Sem este passo o e-mail funciona, mas abre a página padrão do Firebase, que não tem a lista de regras nem a checagem "diferente da atual".
+2. **Authentication → Settings (Configurações) → Authorized domains (Domínios autorizados) → Add domain**: adicione `SEU-DOMINIO` (só o endereço, sem `https://`). Sem isso o e-mail sai do mesmo jeito, só sem o botão de continuar depois da troca.
+3. (Opcional) No mesmo modelo, ajuste o nome do remetente e o assunto. O idioma já sai em português (`pt-BR`).
+4. (Opcional, deixe para depois) **Authentication → Settings → Password policy** faz o Firebase recusar senha fraca também no servidor. Ela vale **também para o cadastro de novas contas**, que hoje aceita 6 caracteres, e no modo "Require" quem tem senha fraca pode ser obrigado a trocá-la para entrar. Ligue só depois de aplicar as mesmas regras no cadastro; a tela de redefinição já confere as regras sozinha.
+
+### Limites
+
+- "Diferente da atual" compara só com a senha de hoje (o Firebase não guarda histórico de senhas).
+- Só quem tem o link do e-mail consegue testar uma senha contra a atual; o Firebase limita tentativas repetidas.
+- O cadastro de novas contas (`/register`) ainda aceita senhas de 6 caracteres; as regras de senha forte valem para a redefinição.
+
 ## 🎨 Temas e Identidade Visual
 
 ### Presets de cores
@@ -398,6 +437,8 @@ O aplicativo estará disponível em `http://localhost:3000`
 - `/` - Painel do barbeiro (pede login se não houver sessão)
 - `/login` - Login do barbeiro
 - `/register` - Cadastro de uma nova barbearia
+- `/forgot-password` - Esqueci minha senha (pede o e-mail)
+- `/auth/action` - Links dos e-mails do Firebase (a URL de ação do console): nova senha (`?mode=resetPassword`) e confirmação de e-mail (`?mode=verifyEmail`). Os mesmos links também funcionam em `/reset-password` e na raiz (`/?mode=...&oobCode=...`)
 - `/checkin?barber=ID&t=TOKEN` - Auto check-in (link/QR Code com validade)
 - `/?client=ID&barber=ID&k=CHAVE` - Visualização do cliente (gerado automaticamente; `k` é a chave secreta que libera o Pix)
 
@@ -608,6 +649,8 @@ export function generateWhatsAppMessage(client, position, link) {
 | Comando | O que confere |
 |---|---|
 | `npm run test:pix` | Código Pix (inclui o exemplo oficial do Banco Central, CRC `1D3D`), todos os tipos de chave (CPF, CNPJ numérico e alfanumérico, celular, e-mail, aleatória) e valores |
+| `npm run test:password` | Regras de senha forte (obrigatórias, palavras comuns com letras trocadas, e-mail na senha, repetições, sequências, medidor e e-mail mascarado) |
+| `npm run test:password-reset` | Redefinição de senha e confirmação de e-mail com o **código real dos serviços** contra o emulador do Authentication: pedido do link, e-mail sem conta, "igual à atual", troca, uso único do link, login com a senha nova e link de confirmação do cadastro |
 | `npm run test:contrast` | Contraste dos textos em todos os presets de cores |
 | `npm run test:rules` | ~150 casos das regras do Firestore no emulador (check-in, chave secreta, comprovantes, config do Pix, coleções do barbeiro, acesso de outros barbeiros) |
 | `npm run test:pix-flow` | Fluxo completo com o **código real dos serviços e as regras reais**: check-in, comprovante, recusar/reenviar, confirmar, finalizar, cancelar (devolvido/crédito), desfazer, crédito e Pix manual |
