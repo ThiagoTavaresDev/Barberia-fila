@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { X, Printer, RefreshCw, Clock } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -15,6 +16,7 @@ export default function QrModal({ show, onClose }) {
   const [hours, setHours] = useState(String(link?.validityHours || DEFAULT_VALIDITY_HOURS));
   const [generating, setGenerating] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const qrBoxRef = useRef(null);
 
   useEffect(() => {
     if (!show) return;
@@ -51,8 +53,14 @@ export default function QrModal({ show, onClose }) {
   };
 
   const handlePrintQr = () => {
+    const qrSvg = qrBoxRef.current?.innerHTML;
+    if (!qrSvg) return;
     const printWindow = window.open('', '', 'width=600,height=600');
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(checkInUrl)}`;
+    if (!printWindow) {
+      alert("O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente de novo.");
+      return;
+    }
+    const safeUrl = checkInUrl.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     printWindow.document.write(`
           <html>
@@ -68,7 +76,8 @@ export default function QrModal({ show, onClose }) {
                   margin: 0;
                   font-family: sans-serif;
                 }
-                img {
+                svg {
+                  width: 400px;
                   max-width: 80%;
                   height: auto;
                 }
@@ -86,11 +95,11 @@ export default function QrModal({ show, onClose }) {
                 }
               </style>
             </head>
-            <body>
+            <body onload="window.print();window.close()">
               <h1>Auto Check-in</h1>
-              <img src="${qrUrl}" onload="window.print();window.close()" />
+              ${qrSvg}
               <p>Escaneie para entrar na fila</p>
-              <p>${checkInUrl}</p>
+              <p>${safeUrl}</p>
             </body>
           </html>
         `);
@@ -113,11 +122,8 @@ export default function QrModal({ show, onClose }) {
 
         {isActive ? (
           <>
-            <div className="bg-white p-4 rounded-lg inline-block">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(checkInUrl)}`}
-                alt="QR Code Check-in"
-              />
+            <div ref={qrBoxRef} className="bg-white p-4 rounded-lg inline-block leading-none">
+              <QRCodeSVG value={checkInUrl} size={200} level="M" marginSize={0} bgColor="#ffffff" fgColor="#000000" title="QR Code Check-in" />
             </div>
 
             <p className="text-ink">

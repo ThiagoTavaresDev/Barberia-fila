@@ -3,7 +3,9 @@ import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
     signOut,
-    createUserWithEmailAndPassword
+    createUserWithEmailAndPassword,
+    EmailAuthProvider,
+    reauthenticateWithCredential
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -80,6 +82,24 @@ export function AuthProvider({ children }) {
         return signOut(auth);
     };
 
+    // Confirma a senha de quem já está logado (usado antes de mudar a chave Pix, que redireciona dinheiro).
+    // Lança um erro com mensagem pronta para mostrar na tela.
+    const reauthenticate = async (password) => {
+        const current = auth.currentUser;
+        if (!current?.email) throw new Error("Sua sessão expirou. Entre novamente.");
+        try {
+            await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email, password));
+        } catch (error) {
+            if (error.code === "auth/too-many-requests") {
+                throw new Error("Muitas tentativas. Aguarde alguns minutos e tente de novo.");
+            }
+            if (error.code === "auth/network-request-failed") {
+                throw new Error("Sem internet. Tente de novo.");
+            }
+            throw new Error("Senha incorreta.");
+        }
+    };
+
     const value = {
         user,
         login,
@@ -87,6 +107,7 @@ export function AuthProvider({ children }) {
         updateProfile,
         patchUser,
         logout,
+        reauthenticate,
         isAuthenticated: !!user
     };
 

@@ -1,0 +1,224 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------
+    // FUNÇÕES AUXILIARES
+    // ---------------------------------------------------------
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Entrada na fila via link de auto-checkin: o token enviado pelo cliente
+    // precisa ser o do link vigente do barbeiro (guardado em users/{userId},
+    // doc privado) e o link não pode ter expirado.
+    function checkinLinkOk(userId) {
+      let link = get(/databases/$(database)/documents/users/$(userId)).data.checkinLink;
+      return request.resource.data.checkinToken == link.token
+          && request.time.toMillis() < link.expiresAt
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 40;
+    }
+
+    // Entrada via check-in: só os campos que o app grava, sem nada extra, e com
+    // serviço/preço/duração IGUAIS ao cadastro do barbeiro. Assim o cliente não
+    // consegue mudar o preço (e, com ele, o valor do Pix), preencher "materials"
+    // para mexer no estoque nem enfiar dados soltos na fila pública.
+    function checkinEntryOk(userId) {
+      let d = request.resource.data;
+      let svc = get(/databases/$(database)/documents/users/$(userId)/services/$(d.serviceId)).data;
+      return d.keys().hasOnly(['checkinToken', 'name', 'phone', 'serviceId', 'serviceName',
+                               'serviceDuration', 'servicePrice', 'notes', 'photoUrl',
+                               'materials', 'joinedAt', 'order', 'status'])
+          && d.status == 'waiting'
+          && d.name is string && d.name.size() <= 40
+          && d.phone is string && d.phone.size() <= 20
+          && d.notes == '' && d.photoUrl == ''
+          && d.materials is list && d.materials.size() == 0
+          && d.order is int && d.order >= 1 && d.joinedAt is int
+          && d.serviceName == svc.name
+          && d.servicePrice is number && d.serviceDuration is int
+          && (!(svc.price is number) || svc.price == d.servicePrice)
+          && (!(svc.duration is number) || svc.duration == d.serviceDuration);
+    }
+
+    // Única edição pública permitida na fila: a nota do cliente (uma vez, de 1 a 5).
+    function ratingOnly() {
+      let d = request.resource.data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['rating', 'ratedAt'])
+          && d.rating is int && d.rating >= 1 && d.rating <= 5
+          && d.ratedAt is int
+          && !('rating' in resource.data);
+    }
+
+    // ...e a limpeza do token do check-in logo depois da entrada (o token não fica na fila pública).
+    function tokenCleanup() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkinToken'])
+          && !('checkinToken' in request.resource.data);
+    }
+
+    // ---- Pix: pagamento adiantado ----
+
+    // O ID do pagamento é "<clientId>_<chave secreta do cliente>": quem sabe o ID
+    // inteiro é quem fez o check-in (a chave só existe em client_keys, que só o dono lê).
+    function paymentIdOk(userId, paymentId, clientId) {
+      return paymentId == clientId + '_' +
+          get(/databases/$(database)/documents/users/$(userId)/client_keys/$(clientId)).data.key;
+    }
+
+    function clientInQueue(userId, clientId) {
+      return get(/databases/$(database)/documents/users/$(userId)/queue/$(clientId)).data.status == 'waiting';
+    }
+
+    // Cliente envia o 1º comprovante: o pagamento nasce "receipt_sent", sem nenhum valor,
+    // e o comprovante é gravado no mesmo lote.
+    function clientPaymentCreate(userId, paymentId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['clientId', 'status', 'source', 'createdAt', 'receiptSentAt', 'updatedAt'])
+          && d.clientId is string
+          && paymentIdOk(userId, paymentId, d.clientId)
+          && clientInQueue(userId, d.clientId)
+          && d.status == 'receipt_sent' && d.source == 'client'
+          && d.createdAt is int && d.receiptSentAt is int && d.updatedAt is int
+          && getAfter(/databases/$(database)/documents/users/$(userId)/payment_receipts/$(paymentId)).data.image is string;
+    }
+
+    // Reenvio: só depois de o barbeiro marcar "rejected", mudando apenas status e datas,
+    // e obrigatoriamente com um comprovante NOVO (createdAt maior) gravado no mesmo lote.
+    function clientPaymentResend(userId, paymentId) {
+      return resource.data.status == 'rejected'
+          && clientInQueue(userId, resource.data.clientId)
+          && request.resource.data.status == 'receipt_sent'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'receiptSentAt', 'updatedAt'])
+          && request.resource.data.receiptSentAt is int && request.resource.data.updatedAt is int
+          && getAfter(/databases/$(database)/documents/users/$(userId)/payment_receipts/$(paymentId)).data.image is string
+          && getAfter(/databases/$(database)/documents/users/$(userId)/payment_receipts/$(paymentId)).data.createdAt
+             > get(/databases/$(database)/documents/users/$(userId)/payment_receipts/$(paymentId)).data.createdAt;
+    }
+
+    // Comprovante: só a imagem JPEG que o app gera (re-codificada, sem metadados) e um limite de tamanho.
+    function validReceipt() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['image', 'createdAt'])
+          && d.image is string && d.image.size() < 750000
+          && d.image.matches('data:image/jpeg;base64,.*')
+          && d.createdAt is int;
+    }
+
+    // Configuração do Pix (pública para o cliente montar o QR): campos, tipos e tamanhos.
+    function validPixConfig(d) {
+      return d.keys().hasOnly(['enabled', 'keyType', 'key', 'receiverName', 'city',
+                               'whatsapp', 'policyText', 'updatedAt'])
+          && d.enabled is bool
+          && d.keyType in ['cpf', 'cnpj', 'phone', 'email', 'random']
+          && d.key is string && d.key.size() <= 77
+          && d.receiverName is string && d.receiverName.size() <= 25
+          && d.city is string && d.city.size() <= 15
+          && d.whatsapp is string && d.whatsapp.size() <= 15
+          && d.policyText is string && d.policyText.size() <= 300
+          && d.updatedAt is int
+          && (d.enabled == false
+              || (d.key.size() >= 5 && d.receiverName.size() >= 1 && d.city.size() >= 1));
+    }
+
+    // ---------------------------------------------------------
+    // ESTRUTURA (/users/{userId}/...)
+    // As regras legadas da raiz (/services, /queue, /appointments com "if true")
+    // foram removidas: o app só usa os caminhos abaixo e elas deixavam qualquer
+    // pessoa da internet ler, gravar e apagar esses dados.
+    // ---------------------------------------------------------
+    match /users/{userId} {
+      // 1. O Barbeiro (Dono) tem acesso total à raiz do seu documento
+      allow read, write: if isOwner(userId);
+
+      // 1.1 Info pública (link de check-in, identidade visual...). Leitura pública;
+      //     NUNCA guardar o token secreto aqui. A config do Pix tem regra própria.
+      match /public/{docId} {
+        allow read: if true;
+        allow write: if isOwner(userId) && docId != 'pix';
+      }
+
+      match /public/pix {
+        allow read: if true;
+        allow create, update: if isOwner(userId) && validPixConfig(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // 2. Serviços (Menu): PÚBLICO para ler
+      match /services/{serviceId} {
+        allow read: if true;
+        allow write: if isOwner(userId);
+      }
+
+      // 3. Fila (Queue): PÚBLICO para ler (posição e tempo de espera);
+      //    entrar só com link válido e dados conferidos (ou sendo o dono);
+      //    o público só edita a própria nota e o token do check-in.
+      match /queue/{queueId} {
+        allow get, list: if true;
+        allow create: if isOwner(userId) || (checkinLinkOk(userId) && checkinEntryOk(userId));
+        allow update: if isOwner(userId) || ratingOnly() || tokenCleanup();
+        allow delete: if isOwner(userId);
+      }
+
+      // 3.1 Chave secreta de cada entrada da fila (vai no link do cliente).
+      //     Só o dono lê; o cliente só a cria junto com a própria entrada (mesmo lote).
+      match /client_keys/{clientId} {
+        allow read, update, delete: if isOwner(userId);
+        allow create: if isOwner(userId) || (
+            request.resource.data.keys().hasOnly(['key', 'createdAt'])
+            && request.resource.data.key is string
+            && request.resource.data.key.matches('[0-9a-f]{32}')
+            && request.resource.data.createdAt is int
+            && !exists(/databases/$(database)/documents/users/$(userId)/queue/$(clientId))
+            && getAfter(/databases/$(database)/documents/users/$(userId)/queue/$(clientId)).data.status == 'waiting');
+      }
+
+      // 3.2 Pagamentos adiantados por Pix. O ID carrega a chave secreta do cliente:
+      //     "get" público (precisa do ID completo), listar só o dono.
+      match /payments/{paymentId} {
+        allow get: if true;
+        allow list, delete: if isOwner(userId);
+        allow create: if isOwner(userId) || clientPaymentCreate(userId, paymentId);
+        allow update: if isOwner(userId) || clientPaymentResend(userId, paymentId);
+      }
+
+      // 3.3 Comprovantes (imagem): só o dono lê e apaga.
+      match /payment_receipts/{paymentId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) || (
+            validReceipt()
+            && !exists(/databases/$(database)/documents/users/$(userId)/payments/$(paymentId))
+            && getAfter(/databases/$(database)/documents/users/$(userId)/payments/$(paymentId)).data.status == 'receipt_sent');
+        allow update: if isOwner(userId) || (
+            validReceipt()
+            && get(/databases/$(database)/documents/users/$(userId)/payments/$(paymentId)).data.status == 'rejected'
+            && getAfter(/databases/$(database)/documents/users/$(userId)/payments/$(paymentId)).data.status == 'receipt_sent');
+      }
+
+      // 4. Agendamentos: Apenas o Dono
+      match /appointments/{appointmentId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // 5. Clientes (CRM): Apenas o Dono
+      match /clients/{clientId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // 5.1 Galeria de estilo (fotos dos clientes): Apenas o Dono
+      match /client_photos/{photoId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // 6. Financeiro/Despesas: Apenas o Dono
+      match /expenses/{expenseId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // 7. Produtos (Estoque): Apenas o Dono
+      match /products/{productId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

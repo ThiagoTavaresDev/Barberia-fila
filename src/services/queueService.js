@@ -14,9 +14,11 @@ import {
   getDoc,
   increment,
   deleteField,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "../firebase";
+import { randomHex } from "./checkinLink";
 
 // Helper para obter referências de coleção baseadas no userId
 const getCollections = (userId) => {
@@ -85,15 +87,25 @@ async function getNextOrder(userId) {
 // Adicionar cliente
 // checkinToken: token do link de auto-checkin (clientes). As regras do Firestore
 // exigem que ele bata com o link vigente do barbeiro; o barbeiro logado não precisa.
+//
+// A entrada na fila e a chave secreta do cliente (client_keys, que vai no link dele e protege o
+// pagamento por Pix) são gravadas no MESMO lote: as regras só aceitam a chave junto com a entrada.
+// `serviceId` precisa ser o ID do serviço cadastrado: no check-in, as regras conferem nome, preço
+// e duração com o cadastro do barbeiro.
 export async function addClient(userId, clientData, checkinToken) {
   const { queue } = getCollections(userId);
   const joinedAt = Date.now();
   const order = await getNextOrder(userId);
 
-  const docRef = await addDoc(queue, {
+  const docRef = doc(queue); // ID gerado aqui, para a chave do cliente poder usar o mesmo ID
+  const clientKey = randomHex(16);
+
+  const batch = writeBatch(db);
+  batch.set(docRef, {
     ...(checkinToken ? { checkinToken } : {}),
     name: clientData.name,
     phone: clientData.phone,
+    ...(clientData.serviceId ? { serviceId: clientData.serviceId } : {}),
     serviceName: clientData.serviceName,
     serviceDuration: parseInt(clientData.serviceDuration),
     servicePrice: parseFloat(clientData.servicePrice) || 0,
@@ -104,6 +116,8 @@ export async function addClient(userId, clientData, checkinToken) {
     order,
     status: "waiting",
   });
+  batch.set(doc(db, "users", userId, "client_keys", docRef.id), { key: clientKey, createdAt: joinedAt });
+  await batch.commit();
 
   // A fila é pública para leitura: não deixar o token gravado no documento
   if (checkinToken) {
@@ -114,16 +128,32 @@ export async function addClient(userId, clientData, checkinToken) {
     }
   }
 
-  // Sync profile name immediately (Name Sync Fix)
-  if (clientData.phone) {
+  // Sync profile name immediately (Name Sync Fix). Só no painel: o cliente do check-in não tem
+  // permissão no CRM (a coleção clients é só do dono) e a tentativa sempre falhava.
+  if (clientData.phone && !checkinToken) {
     updateClientProfile(userId, clientData.phone, {
       name: clientData.name,
       // We don't update stats here, just identification
     });
   }
 
-  return { id: docRef.id };
+  return { id: docRef.id, key: clientKey };
 }
+
+// Chave secreta do cliente (para o link de acompanhamento). Entradas antigas, criadas por
+// agendamento ou antes do Pix existir, ganham a chave na hora em que o barbeiro gera o link.
+export async function ensureClientKey(userId, clientId) {
+  const ref = doc(db, "users", userId, "client_keys", clientId);
+  const snap = await getDoc(ref);
+  if (snap.exists() && snap.data().key) return snap.data().key;
+  const key = randomHex(16);
+  await setDoc(ref, { key, createdAt: Date.now() });
+  return key;
+}
+
+// Link de acompanhamento do cliente; `key` libera o pagamento por Pix na tela dele
+export const buildClientLink = (barberId, clientId, key) =>
+  `${window.location.origin}?client=${clientId}&barber=${barberId}${key ? `&k=${key}` : ""}`;
 
 // Remover cliente
 export async function removeClient(userId, id) {
@@ -156,18 +186,44 @@ export async function moveClient(userId, client, direction, queueList) {
 }
 
 // Finalizar atendimento
-export async function completeFirst(userId, queueList, paymentMethod = 'money') {
+//   options.payment      pagamento Pix do cliente ({ id, status, receivedAmount }), se houver
+//   options.creditDelta  variação do crédito do cliente: negativo = crédito descontado,
+//                        positivo = sobra de um Pix pago a mais
+export async function completeFirst(userId, queueList, paymentMethod = 'money', options = {}) {
   if (queueList.length === 0) return;
 
   const first = queueList[0];
   const now = Date.now();
+  const { payment = null, creditDelta = 0 } = options;
 
-  // 1. Update Queue Item
-  await updateDoc(doc(db, "users", userId, "queue", first.id), {
-    status: "done",
-    completedAt: now,
-    paymentMethod,
-  });
+  // 1. Atendimento + pagamento Pix + crédito no mesmo lote: grava tudo ou nada
+  const batch = writeBatch(db);
+  const queueUpdate = { status: "done", completedAt: now, paymentMethod };
+  if (payment?.status === "confirmed") {
+    queueUpdate.prepaidAmount = payment.receivedAmount || 0;
+    queueUpdate.paymentId = payment.id;
+  }
+  if (creditDelta < 0) queueUpdate.creditUsed = -creditDelta;
+  if (creditDelta > 0) queueUpdate.creditAdded = creditDelta;
+  batch.update(doc(db, "users", userId, "queue", first.id), queueUpdate);
+
+  if (payment) {
+    // Pix conferido vira "usado"; comprovante que ficou sem conferir é descartado
+    batch.update(doc(db, "users", userId, "payments", payment.id), {
+      status: payment.status === "confirmed" ? "used" : "dismissed",
+      resolvedAt: now,
+      updatedAt: now,
+    });
+    batch.delete(doc(db, "users", userId, "payment_receipts", payment.id)); // dado de terceiros: não guardar depois de usado
+  }
+  if (creditDelta !== 0 && first.phone) {
+    batch.set(
+      doc(db, "users", userId, "clients", sanitizePhone(first.phone)),
+      { phone: first.phone, creditBalance: increment(creditDelta), updatedAt: now },
+      { merge: true }
+    );
+  }
+  await batch.commit();
 
   // 1.5 Deduct Materials from Inventory
   if (first.materials && Array.isArray(first.materials) && first.materials.length > 0) {
@@ -213,8 +269,10 @@ export async function completeFirst(userId, queueList, paymentMethod = 'money') 
 const sanitizePhone = (phone) => phone.replace(/\D/g, "");
 
 // Atualizar/Criar Perfil do Cliente (Persistente)
-export async function updateClientProfile(userId, phone, data) {
+export async function updateClientProfile(userId, phone, rawData) {
   if (!userId || !phone) return;
+  // Campos undefined fazem o Firestore recusar a gravação: ficam de fora
+  const data = Object.fromEntries(Object.entries(rawData || {}).filter(([, value]) => value !== undefined));
   try {
     const cleanPhone = sanitizePhone(phone);
     const clientRef = doc(db, "users", userId, "clients", cleanPhone);
@@ -241,16 +299,10 @@ export async function updateClientProfile(userId, phone, data) {
           }
         });
 
+        // increment() funciona em setDoc de um documento novo (parte de zero); totalVisits/totalSpent só
+        // entram se o chamador enviou: antes iam como undefined e o perfil nunca era criado.
         await setDoc(clientRef, {
           phone,
-          ...createData,
-          totalVisits: typeof data.totalVisits === 'object' ? 1 : data.totalVisits, // Handle increment on create
-          totalSpent: typeof data.totalSpent === 'object' ? (data.totalSpent.operand || 0) : data.totalSpent, // Handle increment value (hacky but safer to just set initial)
-          // Actually, for creation, we can't use increment() efficiently on client-side SDK sometimes in the same set? 
-          // No, increment works in setDoc. But let's be safe.
-          // Wait, data.totalSpent IS an increment object. 
-          // For creation, we should just set the initial value.
-          // However, let's stick to using the passed data for now, but ensure nested structure.
           ...createData,
           updatedAt: Date.now()
         });
@@ -279,6 +331,13 @@ export async function getClientProfile(userId, phone) {
     console.error("Error getting client profile", error);
     return null;
   }
+}
+
+// Crédito do cliente (Pix adiantado de um atendimento cancelado), guardado no perfil dele
+export async function getClientCredit(userId, phone) {
+  const profile = await getClientProfile(userId, phone);
+  const credit = Math.round((Number(profile?.creditBalance) || 0) * 100) / 100;
+  return credit > 0 ? credit : 0;
 }
 
 // Obter clientes inativos (para recuperação)
@@ -405,12 +464,40 @@ export async function updateClient(userId, clientId, data) {
   await updateDoc(doc(db, "users", userId, "queue", clientId), data);
 }
 
-// Desfazer conclusão
+// Desfazer conclusão (devolve o Pix a "confirmado" e desfaz o crédito usado/gerado)
 export async function undoComplete(userId, clientId) {
-  await updateDoc(doc(db, "users", userId, "queue", clientId), {
+  const queueRef = doc(db, "users", userId, "queue", clientId);
+  const snap = await getDoc(queueRef);
+  const data = snap.exists() ? snap.data() : {};
+  const now = Date.now();
+
+  const batch = writeBatch(db);
+  batch.update(queueRef, {
     status: "waiting",
     completedAt: null,
+    prepaidAmount: deleteField(),
+    paymentId: deleteField(),
+    creditUsed: deleteField(),
+    creditAdded: deleteField(),
   });
+
+  if (data.paymentId) {
+    batch.update(doc(db, "users", userId, "payments", data.paymentId), {
+      status: "confirmed",
+      resolvedAt: deleteField(),
+      updatedAt: now,
+    });
+  }
+
+  const creditRevert = (Number(data.creditUsed) || 0) - (Number(data.creditAdded) || 0);
+  if (creditRevert !== 0 && data.phone) {
+    batch.set(
+      doc(db, "users", userId, "clients", sanitizePhone(data.phone)),
+      { phone: data.phone, creditBalance: increment(creditRevert), updatedAt: now },
+      { merge: true }
+    );
+  }
+  await batch.commit();
 }
 
 // Listener em tempo real da fila
@@ -570,12 +657,40 @@ export async function cancelAppointment(userId, appointmentId) {
   });
 }
 
-// Cancelar cliente da fila
-export async function cancelClient(userId, clientId) {
-  await updateDoc(doc(db, "users", userId, "queue", clientId), {
-    status: "cancelled",
-    cancelledAt: Date.now(),
-  });
+// Cancelar cliente da fila.
+// Se ele já tinha Pix, o barbeiro decide o destino do valor (nada some sem decisão registrada):
+//   resolution = { payment, outcome: "refunded" | "credit", amount, phone }
+// Um comprovante ainda não conferido é só descartado ("dismissed").
+export async function cancelClient(userId, clientId, resolution = null) {
+  const now = Date.now();
+  const batch = writeBatch(db);
+  const queueUpdate = { status: "cancelled", cancelledAt: now };
+
+  if (resolution?.payment) {
+    const { payment, outcome, amount, phone } = resolution;
+    const paymentRef = doc(db, "users", userId, "payments", payment.id);
+
+    if (payment.status === "confirmed") {
+      if (outcome !== "refunded" && outcome !== "credit") throw new Error("Escolha o que fazer com o valor pago.");
+      if (outcome === "credit" && !phone) throw new Error("Cliente sem telefone: não dá para guardar crédito.");
+      queueUpdate.paymentResolution = outcome;
+      queueUpdate.prepaidAmount = amount;
+      batch.update(paymentRef, { status: outcome, resolvedAt: now, updatedAt: now });
+      if (outcome === "credit") {
+        batch.set(
+          doc(db, "users", userId, "clients", sanitizePhone(phone)),
+          { phone, creditBalance: increment(amount), updatedAt: now },
+          { merge: true }
+        );
+      }
+    } else {
+      batch.update(paymentRef, { status: "dismissed", resolvedAt: now, updatedAt: now });
+    }
+    batch.delete(doc(db, "users", userId, "payment_receipts", payment.id));
+  }
+
+  batch.update(doc(db, "users", userId, "queue", clientId), queueUpdate);
+  await batch.commit();
 }
 
 // Obter histórico completo

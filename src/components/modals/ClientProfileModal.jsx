@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { X, Calendar, History, Camera, Trash2, Plus, Image as ImageIcon } from "lucide-react";
+import { X, Calendar, History, Camera, Trash2, Plus, Image as ImageIcon, PiggyBank } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getClientProfile, addClientPhoto, getClientPhotos, deleteClientPhoto } from "../../services/queueService";
 import { compressImage } from "../../utils/imageUtils";
 import LoyaltyCard from "../LoyaltyCard";
+import { formatBRL } from "../../utils/pix";
 
 export default function ClientProfileModal({ show, onClose, client }) {
     const { user } = useAuth();
@@ -137,6 +138,17 @@ export default function ClientProfileModal({ show, onClose, client }) {
                                     </p>
                                 </div>
                             </div>
+
+                            {/* Crédito de Pix de um atendimento cancelado */}
+                            {Number(profile?.creditBalance) > 0.004 && (
+                                <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                    <PiggyBank className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-semibold text-ink">Crédito disponível: {formatBRL(profile.creditBalance)}</p>
+                                        <p className="text-sm text-ink/80">Você escolhe descontar na hora de finalizar o próximo atendimento.</p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Loyalty Card Component */}
                             <div className="transform scale-[0.85] -my-4 origin-center">

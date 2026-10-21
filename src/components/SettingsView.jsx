@@ -5,6 +5,7 @@ import { useTheme } from "../context/ThemeContext";
 import { saveBranding } from "../services/brandingService";
 import { THEME_PRESETS, DEFAULT_THEME_ID, buildPalette } from "../utils/themes";
 import ImageCropModal from "./modals/ImageCropModal";
+import PixSettings from "./PixSettings";
 
 const MAX_FILE_MB = 15;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg"];
@@ -237,6 +238,9 @@ export default function SettingsView() {
                     {savingProfile ? "Salvando..." : <><Save className="w-5 h-5" /> Salvar Perfil</>}
                 </button>
             </div>
+
+            {/* Pix */}
+            <PixSettings />
 
             {/* Aparência */}
             <div className={cardClass}>

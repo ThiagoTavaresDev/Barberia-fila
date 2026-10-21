@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Scissors, Users, Clock, Instagram, Star } from "lucide-react";
 import BrandLogo from "./BrandLogo";
+import PixPaymentCard from "./PixPaymentCard";
+import { usePixPayment } from "../hooks/usePixPayment";
+import { formatBRL } from "../utils/pix";
 import { useTheme, usePublicBranding } from "../context/ThemeContext";
 import { getAccentColors } from "../utils/themes";
 import confetti from "canvas-confetti";
@@ -15,7 +18,7 @@ import tadaSound from "../sounds/ta-da.mp3";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
-export default function ClientView({ queue: propQueue = [], clientId, barberId }) {
+export default function ClientView({ queue: propQueue = [], clientId, barberId, clientKey }) {
   // State Definitions (Must be first)
   const [localQueue, setLocalQueue] = useState([]);
 
@@ -27,6 +30,10 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
   const [hasRated, setHasRated] = useState(false);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [barberStatus, setBarberStatus] = useState({ status: 'available' });
+
+  // Pix adiantado: configuração da barbearia + pagamento deste cliente (precisa da chave `k` do link)
+  const { config: pixConfig, payment: pixPayment } = usePixPayment(barberId, clientId, clientKey);
+  const pixResolution = pixPayment?.status === "refunded" || pixPayment?.status === "credit" ? pixPayment : null;
 
   // Identidade visual da barbearia (tema, logo, instagram) vinda do link
   usePublicBranding(barberId);
@@ -285,15 +292,23 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
           <BrandLogo variant="badge" size="w-20 h-20" className="mx-auto mb-6" />
 
           <h2 className="text-2xl font-bold text-white">
-            {hasRated ? "Obrigado pela avaliação!" : "Atendimento Finalizado"}
+            {pixResolution ? "Atendimento cancelado" : hasRated ? "Obrigado pela avaliação!" : "Atendimento Finalizado"}
           </h2>
 
-          <p className="text-gray-300 text-lg leading-relaxed">
-            {hasRated
-              ? "Sua opinião é muito importante para nós!"
-              : "Obrigado pela confiança no nosso serviço, até o próximo atendimento!"
-            }
-          </p>
+          {pixResolution ? (
+            <p className="text-gray-300 text-lg leading-relaxed">
+              {pixResolution.status === "refunded"
+                ? `Seu Pix de ${formatBRL(pixResolution.receivedAmount)} foi devolvido.`
+                : `${formatBRL(pixResolution.receivedAmount)} ficaram como crédito para o seu próximo atendimento.`}
+            </p>
+          ) : (
+            <p className="text-gray-300 text-lg leading-relaxed">
+              {hasRated
+                ? "Sua opinião é muito importante para nós!"
+                : "Obrigado pela confiança no nosso serviço, até o próximo atendimento!"
+              }
+            </p>
+          )}
 
           {instagramLink && (
             <div className="pt-4">
@@ -402,6 +417,15 @@ export default function ClientView({ queue: propQueue = [], clientId, barberId }
                 </p>
               </div>
             )}
+
+            <PixPaymentCard
+              barberId={barberId}
+              client={client}
+              clientKey={clientKey}
+              position={position}
+              config={pixConfig}
+              payment={pixPayment}
+            />
           </div>
 
 

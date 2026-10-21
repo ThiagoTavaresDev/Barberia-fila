@@ -8,6 +8,22 @@ import LoginView from "./components/LoginView";
 import RegisterView from "./components/RegisterView";
 import { listenQueue } from "./services/queueService";
 
+// A chave do cliente vem no link (?k=); guardamos no aparelho para sobreviver a um link aberto sem ela
+const CLIENT_KEY_PATTERN = /^[0-9a-f]{32}$/;
+function resolveClientKey(clientId, fromUrl) {
+  const storageKey = `clientKey:${clientId}`;
+  try {
+    if (fromUrl && CLIENT_KEY_PATTERN.test(fromUrl)) {
+      localStorage.setItem(storageKey, fromUrl);
+      return fromUrl;
+    }
+    const saved = localStorage.getItem(storageKey);
+    return saved && CLIENT_KEY_PATTERN.test(saved) ? saved : null;
+  } catch {
+    return fromUrl && CLIENT_KEY_PATTERN.test(fromUrl) ? fromUrl : null;
+  }
+}
+
 function AppContent() {
   const { user, isAuthenticated } = useAuth();
   const [queue, setQueue] = useState([]);
@@ -20,6 +36,7 @@ function AppContent() {
     isRegister: false, // New route
     paramId: null, // clientId or just placeholder
     barberId: null, // barberId from URL
+    clientKey: null, // chave secreta do cliente no link (?k=): libera o pagamento por Pix
     checkinToken: null // token do link de check-in (?t=)
   });
 
@@ -38,7 +55,7 @@ function AppContent() {
       // Explicit login route
       setRoute({ isBarber: true });
     } else if (clientParam) {
-      setRoute({ isClient: true, paramId: clientParam, barberId: barberParam });
+      setRoute({ isClient: true, paramId: clientParam, barberId: barberParam, clientKey: resolveClientKey(clientParam, params.get("k")) });
     } else {
       // Default to barber view (will require login)
       setRoute({ isBarber: true });
@@ -75,7 +92,7 @@ function AppContent() {
   }
 
   if (route.isClient && route.paramId) {
-    return <ClientView queue={queue} clientId={route.paramId} barberId={route.barberId} />;
+    return <ClientView queue={queue} clientId={route.paramId} barberId={route.barberId} clientKey={route.clientKey} />;
   }
 
   if (!isAuthenticated) {

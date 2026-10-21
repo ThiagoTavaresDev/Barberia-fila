@@ -6,7 +6,7 @@ export const MIN_VALIDITY_HOURS = 1;
 export const MAX_VALIDITY_HOURS = 72;
 export const WARNING_MINUTES = 30;
 
-const randomHex = (bytes) => {
+export const randomHex = (bytes) => {
   const arr = new Uint8Array(bytes);
   crypto.getRandomValues(arr);
   return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");

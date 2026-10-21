@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import InventoryView from "./InventoryView";
 import {
   Scissors, Users, Trash2, CheckCircle, Clock, User, Phone, Briefcase, Plus,
@@ -15,8 +15,11 @@ import {
   listenServices, addClient, removeClient, moveClient, completeFirst,
   listenQueue, listenAppointments, moveAppointmentToQueue, cancelAppointment,
   cancelClient, getFullHistory, updateClient, undoComplete,
-  addService, addAppointment, removeService, getClientProfile, listenProducts
+  addService, addAppointment, removeService, getClientProfile, listenProducts,
+  ensureClientKey, buildClientLink, getClientCredit
 } from "../services/queueService";
+import { listenPayments, listenPixConfig } from "../services/pixService";
+import { formatBRL, isPixReady } from "../utils/pix";
 import { listenBarberStatus, endBreak } from "../services/barberStatus";
 import { formatTimeLeft, WARNING_MINUTES } from "../services/checkinLink";
 import { useAuth } from "../context/AuthContext";
@@ -28,6 +31,8 @@ import EditClientModal from "./modals/EditClientModal";
 import QrModal from "./modals/QrModal";
 import BreakModal from "./modals/BreakModal";
 import FinishServiceModal from "./modals/FinishServiceModal";
+import PaymentReviewModal from "./modals/PaymentReviewModal";
+import PrepaidResolutionModal from "./modals/PrepaidResolutionModal";
 import ClientProfileModal from "./modals/ClientProfileModal";
 import ClientsView from "./ClientsView";
 import SettingsView from "./SettingsView";
@@ -55,6 +60,14 @@ export default function BarberView() {
 
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [clientToFinish, setClientToFinish] = useState(null);
+  const [finishCredit, setFinishCredit] = useState(0);
+
+  // Pix adiantado: pagamentos ativos, quem está sendo conferido/cancelado e se o Pix está ligado
+  const [payments, setPayments] = useState([]);
+  const [pixEnabled, setPixEnabled] = useState(false);
+  const [reviewTargetId, setReviewTargetId] = useState(null);
+  const [resolveTargetId, setResolveTargetId] = useState(null);
+  const knownReceiptsRef = useRef(null);
 
   // CRM States
   const [showClientProfileModal, setShowClientProfileModal] = useState(false);
@@ -114,6 +127,72 @@ export default function BarberView() {
       unsubscribeProducts();
     };
   }, [userId]);
+
+  // Pagamentos por Pix: avisa com som quando chega um comprovante novo (como no aviso de cliente novo)
+  useEffect(() => {
+    if (!userId) return undefined;
+    const unsubscribePayments = listenPayments(
+      userId,
+      (list) => {
+        setPayments(list);
+        const waitingIds = new Set(list.filter((p) => p.status === "receipt_sent").map((p) => p.id));
+        const known = knownReceiptsRef.current;
+        if (known && [...waitingIds].some((id) => !known.has(id))) {
+          const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+          audio.play().catch(e => console.log("Audio play failed:", e));
+        }
+        knownReceiptsRef.current = waitingIds;
+      },
+      (error) => console.error("Erro ao escutar pagamentos Pix:", error)
+    );
+    const unsubscribePix = listenPixConfig(userId, (cfg) => setPixEnabled(isPixReady(cfg)), () => setPixEnabled(false));
+    return () => {
+      unsubscribePayments();
+      unsubscribePix();
+      knownReceiptsRef.current = null;
+    };
+  }, [userId]);
+
+  const paymentByClient = useMemo(() => {
+    const map = {};
+    payments.forEach((p) => { map[p.clientId] = p; });
+    return map;
+  }, [payments]);
+
+  const receiptsToReview = queue.filter((c) => paymentByClient[c.id]?.status === "receipt_sent");
+
+  // Selo do Pix no cartão do cliente na fila (cada selo abre a conferência)
+  const renderPixStatus = (client) => {
+    const payment = paymentByClient[client.id];
+    if (!payment) {
+      if (!pixEnabled || client.type === "break") return null;
+      return (
+        <button onClick={() => setReviewTargetId(client.id)} className="mt-3 block text-sm text-ink/80 hover:text-ink underline">
+          Marcar Pix recebido
+        </button>
+      );
+    }
+    if (payment.status === "receipt_sent") {
+      return (
+        <button onClick={() => setReviewTargetId(client.id)} className="mt-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-ink text-sm font-semibold hover:bg-amber-500/20 transition-colors text-left">
+          <QrCode className="w-4 h-4 text-amber-500 shrink-0" /> Comprovante de Pix enviado · {formatBRL(client.servicePrice)}
+          <span className="underline">Conferir</span>
+        </button>
+      );
+    }
+    if (payment.status === "confirmed") {
+      return (
+        <button onClick={() => setReviewTargetId(client.id)} className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-ink text-sm font-semibold hover:bg-green-500/20 transition-colors">
+          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> Pix pago · {formatBRL(payment.receivedAmount)}
+        </button>
+      );
+    }
+    return (
+      <button onClick={() => setReviewTargetId(client.id)} className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-ink text-sm font-semibold hover:bg-red-500/20 transition-colors text-left">
+        <XCircle className="w-4 h-4 text-red-500 shrink-0" /> Pix não recebido · aguardando novo comprovante
+      </button>
+    );
+  };
 
   // Validade do link de check-in: avisa WARNING_MINUTES antes de expirar
   const checkinLink = user?.checkinLink;
@@ -207,6 +286,7 @@ export default function BarberView() {
     const clientData = {
       name: newClient.name,
       phone: newClient.noPhone ? "" : newClient.phone,
+      serviceId: selectedService.id,
       serviceName: selectedService.name,
       serviceDuration: selectedService.duration,
       servicePrice: selectedService.price,
@@ -214,11 +294,21 @@ export default function BarberView() {
       materials: selectedService.materials || [], // Snapshot materials
     };
 
-    const { id } = await addClient(userId, clientData);
+    let id;
+    let key;
+    try {
+      ({ id, key } = await addClient(userId, clientData));
+    } catch (error) {
+      console.error("Erro ao adicionar cliente:", error);
+      alert(error?.code === "permission-denied"
+        ? "O Firebase não aceitou a gravação. Confira se as regras do Firestore mais recentes foram publicadas."
+        : "Não foi possível adicionar o cliente. Confira sua internet e tente de novo.");
+      return;
+    }
 
     if (!newClient.noPhone) {
       const position = queue.length + 1;
-      const clientLink = `${window.location.origin}?client=${id}&barber=${userId}`;
+      const clientLink = buildClientLink(userId, id, key);
       const message = generateWhatsAppMessage(
         { id, ...clientData },
         position,
@@ -277,6 +367,11 @@ export default function BarberView() {
 
 
   const handleRemove = async (id, name) => {
+    // Quem tem Pix (pago ou comprovante enviado) nunca é apagado: passa pela decisão e vira "cancelado"
+    if (paymentByClient[id]) {
+      setResolveTargetId(id);
+      return;
+    }
     if (window.confirm(`Tem certeza que deseja remover ${name} da fila?`)) {
       await removeClient(userId, id);
     }
@@ -290,13 +385,29 @@ export default function BarberView() {
 
     const clientToComplete = queue[0];
     setClientToFinish(clientToComplete);
+    setFinishCredit(0);
     setShowFinishModal(true);
+    // Crédito guardado de um Pix de atendimento cancelado antes
+    if (clientToComplete.phone) {
+      getClientCredit(userId, clientToComplete.phone).then(setFinishCredit).catch(() => { });
+    }
   };
 
-  const handleConfirmFinish = async (paymentMethod) => {
+  const handleConfirmFinish = async (paymentMethod, { creditDelta = 0 } = {}) => {
     if (!clientToFinish) return;
 
-    await completeFirst(userId, queue, paymentMethod);
+    try {
+      await completeFirst(userId, queue, paymentMethod, {
+        payment: paymentByClient[clientToFinish.id] || null,
+        creditDelta,
+      });
+    } catch (error) {
+      console.error("Erro ao finalizar atendimento:", error);
+      alert(error?.code === "permission-denied"
+        ? "O Firebase não aceitou a gravação. Confira se as regras do Firestore mais recentes foram publicadas."
+        : "Não foi possível finalizar o atendimento. Confira sua internet e tente de novo.");
+      return;
+    }
     setLastCompletedClient(clientToFinish);
     setShowUndo(true);
     setClientToFinish(null);
@@ -340,9 +451,12 @@ export default function BarberView() {
     await moveClient(userId, client, direction, queue);
   };
 
-  const handleResendMessage = (client) => {
+  const handleResendMessage = async (client) => {
     const position = getClientPosition(queue, client.id);
-    const clientLink = `${window.location.origin}?client=${client.id}&barber=${userId}`;
+    // A chave no link libera o Pix na tela do cliente; entradas antigas ganham a chave agora
+    let key = null;
+    try { key = await ensureClientKey(userId, client.id); } catch (e) { console.error("Erro ao obter a chave do cliente:", e); }
+    const clientLink = buildClientLink(userId, client.id, key);
     const message = generateStatusMessage(client, position, clientLink);
     const whatsappLink = generateWhatsAppLink(client.phone, message);
     window.open(whatsappLink, "_blank");
@@ -415,10 +529,32 @@ export default function BarberView() {
   };
 
   const handleCancelClient = async (id, name) => {
+    if (paymentByClient[id]) {
+      setResolveTargetId(id);
+      return;
+    }
     if (window.confirm(`Cancelar atendimento de ${name}?`)) {
       await cancelClient(userId, id);
       if (currentView === "history") loadHistory();
     }
+  };
+
+  // Decisão sobre o Pix de quem foi cancelado: devolvido, crédito (ou comprovante descartado)
+  const handleResolvePrepaid = async (outcome, { notify } = {}) => {
+    const client = queue.find((c) => c.id === resolveTargetId);
+    const payment = paymentByClient[resolveTargetId];
+    if (!client || !payment) { setResolveTargetId(null); return; }
+    const amount = Number(payment.receivedAmount) || 0;
+
+    await cancelClient(userId, client.id, { payment, outcome, amount, phone: client.phone });
+    if (notify && client.phone && outcome) {
+      const text = outcome === "refunded"
+        ? `Olá ${client.name}! Seu atendimento foi cancelado e devolvi seu Pix de ${formatBRL(amount)}.`
+        : `Olá ${client.name}! Seu atendimento foi cancelado. Os ${formatBRL(amount)} do seu Pix ficaram como crédito para o próximo atendimento.`;
+      window.open(generateWhatsAppLink(client.phone, text), "_blank");
+    }
+    setResolveTargetId(null);
+    if (currentView === "history") loadHistory();
   };
 
   const handleOpenClientProfile = (client) => {
@@ -443,6 +579,21 @@ export default function BarberView() {
             </div>
             <button onClick={() => setShowQrModal(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg whitespace-nowrap">
               Gerar novo link
+            </button>
+          </div>
+        )}
+
+        {/* Comprovantes de Pix esperando conferência */}
+        {receiptsToReview.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-xl p-4 border bg-amber-500/10 border-amber-500/40 text-ink">
+            <div className="flex items-center gap-2 text-sm sm:text-base font-medium">
+              <QrCode className="w-5 h-5 shrink-0 text-amber-500" />
+              {receiptsToReview.length === 1
+                ? "1 comprovante de Pix para conferir"
+                : `${receiptsToReview.length} comprovantes de Pix para conferir`}
+            </div>
+            <button onClick={() => setReviewTargetId(receiptsToReview[0].id)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg whitespace-nowrap font-semibold">
+              Conferir
             </button>
           </div>
         )}
@@ -595,6 +746,7 @@ export default function BarberView() {
                             <div className="flex items-center gap-1"><Clock className="w-4 h-4 text-gray-500" /> Tempo aguardando: <LiveTimer joinedAt={client.joinedAt} /></div>
                           </div>
                           {client.notes && <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg"><p className="text-sm text-blue-200 flex items-start gap-2"><span className="text-blue-400 font-bold">📝</span><span className="flex-1">{client.notes}</span></p></div>}
+                          {renderPixStatus(client)}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 w-full md:w-auto">
@@ -695,6 +847,14 @@ export default function BarberView() {
                       <div>
                         <p className="text-white font-bold">{item.name}</p>
                         <p className="text-sm text-gray-400">{item.serviceName} - R$ {item.servicePrice}</p>
+                        {item.status === 'done' && item.prepaidAmount > 0 && (
+                          <p className="text-xs text-ink font-semibold mt-1">Pix adiantado · {formatBRL(item.prepaidAmount)}</p>
+                        )}
+                        {item.paymentResolution && (
+                          <p className="text-xs text-ink font-semibold mt-1">
+                            {item.paymentResolution === 'refunded' ? 'Pix devolvido' : 'Pix virou crédito'} · {formatBRL(item.prepaidAmount)}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-500">{new Date(item.completedAt || item.cancelledAt || item.joinedAt).toLocaleString()}</p>
                       </div>
                       <span className={`px-2 py-1 rounded text-xs ${item.status === 'done' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -739,6 +899,26 @@ export default function BarberView() {
         onClose={() => setShowFinishModal(false)}
         client={clientToFinish}
         onConfirm={handleConfirmFinish}
+        payment={clientToFinish ? paymentByClient[clientToFinish.id] || null : null}
+        credit={finishCredit}
+        onReview={() => { setShowFinishModal(false); setReviewTargetId(clientToFinish?.id || null); }}
+      />
+
+      <PaymentReviewModal
+        show={!!reviewTargetId}
+        onClose={() => setReviewTargetId(null)}
+        userId={userId}
+        entry={queue.find((c) => c.id === reviewTargetId)}
+        payment={reviewTargetId ? paymentByClient[reviewTargetId] || null : null}
+      />
+
+      <PrepaidResolutionModal
+        show={!!resolveTargetId}
+        onClose={() => setResolveTargetId(null)}
+        entry={queue.find((c) => c.id === resolveTargetId)}
+        payment={resolveTargetId ? paymentByClient[resolveTargetId] || null : null}
+        onConfirm={handleResolvePrepaid}
+        onReview={() => { const id = resolveTargetId; setResolveTargetId(null); setReviewTargetId(id); }}
       />
 
       {/* Undo Button */}

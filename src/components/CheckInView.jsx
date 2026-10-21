@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { User, Phone, Search, X, Clock, Users, ShieldCheck } from "lucide-react";
+import { User, Phone, Search, X, Clock, Users, ShieldCheck, Wallet } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 import { usePublicBranding } from "../context/ThemeContext";
 import { addClient, listenServices, listenQueue } from "../services/queueService";
 import { getPublicLinkInfo, isLinkValid } from "../services/checkinLink";
+import { getPixConfig } from "../services/pixService";
+import { isPixReady } from "../utils/pix";
 import { validateClientName, cleanName } from "../utils/nameFilter";
 import { formatPhoneBR, validatePhoneBR } from "../utils/phone";
 
@@ -41,6 +43,17 @@ export default function CheckInView({ barberId, token }) {
 
     // Quantas pessoas estão na fila agora (tempo real). null = ainda carregando.
     const [queueCount, setQueueCount] = useState(null);
+
+    // O barbeiro aceita Pix adiantado? (só para avisar o cliente de que dá para pagar depois de entrar)
+    const [pixEnabled, setPixEnabled] = useState(false);
+    useEffect(() => {
+        if (!barberId) return;
+        let cancelled = false;
+        getPixConfig(barberId)
+            .then((cfg) => { if (!cancelled) setPixEnabled(isPixReady(cfg)); })
+            .catch(() => { /* sem aviso: o Pix continua disponível na tela da fila */ });
+        return () => { cancelled = true; };
+    }, [barberId]);
     // "checking" | "valid" | "expired"
     const [linkStatus, setLinkStatus] = useState("checking");
 
@@ -207,22 +220,33 @@ export default function CheckInView({ barberId, token }) {
             const clientData = {
                 name: cleanName(newClient.name),
                 phone: newClient.phone,
+                serviceId: selectedService.id,
                 serviceName: selectedService.name,
                 serviceDuration: selectedService.duration,
                 servicePrice: selectedService.price,
             };
 
-            const { id } = await addClient(barberId, clientData, token);
+            const { id, key } = await addClient(barberId, clientData, token);
 
             // Redirecionar para a tela de acompanhamento com o barberId correto
-            window.location.href = `/?client=${id}&barber=${barberId}`;
+            // (k = chave secreta do cliente: é ela que libera o pagamento por Pix na tela dele)
+            window.location.href = `/?client=${id}&barber=${barberId}&k=${key}`;
 
         } catch (error) {
             console.error("Erro ao fazer check-in:", error);
             setConfirming(false);
             if (error?.code === "permission-denied") {
-                // Link expirou (ou foi substituído) entre abrir a página e enviar o formulário
-                setLinkStatus("expired");
+                // Quase sempre é o link que expirou (ou foi trocado) entre abrir a página e enviar.
+                // Confere antes de dizer isso: se o link continua válido, o problema é outro.
+                let linkStillValid = false;
+                try { linkStillValid = isLinkValid(await getPublicLinkInfo(barberId), token); } catch { /* sem rede: trata como link expirado */ }
+                if (linkStillValid) {
+                    alert("Não foi possível entrar na fila agora. Atualize a página e tente de novo. Se continuar, avise o barbeiro.");
+                } else {
+                    setLinkStatus("expired");
+                }
+            } else if (error?.code === "unavailable" || navigator.onLine === false) {
+                alert("Sem internet. Confira sua conexão e tente de novo.");
             } else {
                 alert("Erro ao entrar na fila. Tente novamente.");
             }
@@ -392,6 +416,12 @@ export default function CheckInView({ barberId, token }) {
                     >
                         {loading ? "Entrando..." : "Entrar na Fila"}
                     </button>
+                    {pixEnabled && (
+                        <p className="flex items-start justify-center gap-2 text-xs text-ink/80 text-center pt-1">
+                            <Wallet className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span>Depois de entrar na fila você poderá adiantar o pagamento por Pix.</span>
+                        </p>
+                    )}
                 </form>
 
                 {/* Rodapé: fila ao vivo */}
